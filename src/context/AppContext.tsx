@@ -1,0 +1,1500 @@
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import {
+  ServiceRequest,
+  SupportTicket,
+  HoldingDepositRequest,
+  HoldingWithdrawRequest,
+  CmaStatus,
+  RolePermissions,
+  Notification,
+  AuditLog,
+  PageId,
+  AppView,
+  RequestStatus,
+  RequestPriority,
+  FilterState,
+  UserRole
+} from '../types';
+import {
+  getStoredRequests,
+  saveRequests,
+  savePermissions,
+  saveNotifications,
+  saveAuditLogs,
+  logAuditEvent as localLogAuditEvent,
+  resetToDemoData,
+  exportRequestsToCSV,
+  DEFAULT_PERMISSIONS,
+} from '../lib/storage';
+import {
+  supabase,
+  fetchRequestsFromSupabase,
+  saveRequestToSupabase,
+  deleteRequestFromSupabase,
+  fetchPermissionsFromSupabase,
+  savePermissionsToSupabase,
+  fetchNotificationsFromSupabase,
+  saveNotificationToSupabase,
+  markNotificationReadInSupabase,
+  markAllNotificationsReadInSupabase,
+  fetchAuditLogsFromSupabase,
+  saveAuditLogToSupabase,
+  checkSupabaseHealth
+} from '../lib/supabase';
+import { useAuth } from './AuthContext';
+import confetti from 'canvas-confetti';
+
+interface AppContextType {
+  // Top-Level View Routing
+  currentView: AppView;
+  setCurrentView: (view: AppView) => void;
+  goToDashboard: () => void;
+  goToHome: () => void;
+  goToAuth: () => void;
+
+  // Navigation & View
+  currentPage: PageId;
+  setCurrentPage: (page: PageId) => void;
+  allowedPages: PageId[];
+  isPageAllowed: (page: PageId) => boolean;
+
+  // Requests Data & Actions
+  requests: ServiceRequest[];
+  filteredRequests: ServiceRequest[];
+  activeRequest: ServiceRequest | null;
+  setActiveRequest: (req: ServiceRequest | null) => void;
+  isCreateModalOpen: boolean;
+  setIsCreateModalOpen: (open: boolean) => void;
+  initialCreateType?: 'support' | 'deposit' | 'withdraw';
+  openCreateModal: (type?: 'support' | 'deposit' | 'withdraw') => void;
+
+  createSupportTicket: (data: {
+    title: string;
+    description: string;
+    category?: SupportTicket['category'];
+    priority: RequestPriority;
+    remoteId?: string;
+    browserInfo?: string;
+    attachments?: { name: string; size: number; type: string; url: string }[];
+  }) => ServiceRequest;
+
+  createHoldingDeposit: (data: {
+    amount: number;
+    currency: string;
+    depositMethod: HoldingDepositRequest['depositMethod'];
+    transactionReferenceId: string;
+    senderAccountName?: string;
+    depositDate: string;
+    description: string;
+    attachments?: { name: string; size: number; type: string; url: string }[];
+  }) => ServiceRequest;
+
+  createHoldingWithdraw: (data: {
+    amount: number;
+    currency: string;
+    withdrawMethod: HoldingWithdrawRequest['withdrawMethod'];
+    beneficiaryAccountName: string;
+    beneficiaryAccountNumberOrAddress: string;
+    bankNameOrNetwork?: string;
+    swiftOrIban?: string;
+    reason?: string;
+    description: string;
+    attachments?: { name: string; size: number; type: string; url: string }[];
+  }) => ServiceRequest;
+
+  updateRequestStatus: (
+    requestId: string,
+    newStatus: RequestStatus,
+    note?: string,
+    verifiedTxId?: string
+  ) => void;
+
+  updateWithdrawalCmaStep: (
+    requestId: string,
+    step: 'configure' | 'make' | 'authorize',
+    checked: boolean,
+    authorizedAmount?: number
+  ) => void;
+
+  assignOperator: (requestId: string, operatorId: string) => void;
+
+  addComment: (
+    requestId: string,
+    content: string,
+    isInternal: boolean,
+    attachments?: { name: string; size: number; type: string; url: string }[]
+  ) => void;
+
+  deleteRequest: (requestId: string) => void;
+  requestDeletion: (requestId: string, reason: string) => void;
+  approveDeletion: (requestId: string) => void;
+  rejectDeletion: (requestId: string) => void;
+
+  // Permissions & RBAC
+  permissions: Record<UserRole, RolePermissions>;
+  updateRolePermission: (role: UserRole, updates: Partial<RolePermissions>) => void;
+  togglePageForRole: (role: UserRole, pageId: PageId) => void;
+
+  // Notifications
+  notifications: Notification[];
+  userNotifications: Notification[];
+  unreadNotifCount: number;
+  markNotificationAsRead: (id: string) => void;
+  markAllNotificationsAsRead: () => void;
+  clearNotification: (id: string) => void;
+
+  // Audit Logs
+  auditLogs: AuditLog[];
+
+  // Filter & Search
+  filters: FilterState;
+  setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
+  resetFilters: () => void;
+
+  // Theme
+  isDarkMode: boolean;
+  toggleTheme: () => void;
+
+  // Supabase Backend Status & Sync
+  isSupabaseConnected: boolean;
+  syncWithSupabase: () => Promise<void>;
+
+  // Utilities
+  triggerExportCSV: () => void;
+  resetAllDemoData: () => void;
+  toast: (msg: string, type?: 'success' | 'info' | 'error' | 'warning') => void;
+  toastMessage: { text: string; type: 'success' | 'info' | 'error' | 'warning'; id: number } | null;
+}
+
+const initialFilters: FilterState = {
+  searchQuery: '',
+  typeFilter: 'all',
+  statusFilter: 'all',
+  priorityFilter: 'all',
+  operatorFilter: 'all',
+  dateRange: 'all',
+};
+
+const AppContext = createContext<AppContextType | undefined>(undefined);
+
+const VALID_PAGES: PageId[] = [
+  'dashboard',
+  'support',
+  'holding',
+  'all-requests',
+  'clients',
+  'analytics',
+  'rbac',
+  'audit-logs',
+  'settings',
+];
+
+const PAGE_ALIASES: Record<string, PageId> = {
+  userdirectory: 'clients',
+  'user-directory': 'clients',
+  users: 'clients',
+  clientdirectory: 'clients',
+  'client-directory': 'clients',
+  clients: 'clients',
+  requests: 'all-requests',
+  allrequests: 'all-requests',
+  'all-requests': 'all-requests',
+  audit: 'audit-logs',
+  auditlogs: 'audit-logs',
+  'audit-logs': 'audit-logs',
+  audittrail: 'audit-logs',
+  'audit-trail': 'audit-logs',
+};
+
+function getRouteFromHashOrStorage(): { view: AppView; page: PageId } {
+  if (typeof window === 'undefined') {
+    return { view: 'home', page: 'dashboard' };
+  }
+
+  const hashRaw = window.location.hash.replace(/^#\/?/, '').trim().toLowerCase();
+  const hash = hashRaw.split('?')[0];
+
+  if (hash === 'home' || hash === 'public') {
+    return { view: 'home', page: 'dashboard' };
+  }
+  if (hash === 'auth' || hash === 'login' || hash === 'signin' || hash === 'signup') {
+    return { view: 'auth', page: 'dashboard' };
+  }
+  if (PAGE_ALIASES[hash]) {
+    return { view: 'app', page: PAGE_ALIASES[hash] };
+  }
+  if (VALID_PAGES.includes(hash as PageId)) {
+    return { view: 'app', page: hash as PageId };
+  }
+
+  // Fallback to localStorage
+  try {
+    const savedView = localStorage.getItem('csmp_current_view') as AppView | null;
+    const savedPage = localStorage.getItem('csmp_current_page') as PageId | null;
+
+    if (savedView === 'app') {
+      const page = savedPage && VALID_PAGES.includes(savedPage) ? savedPage : 'dashboard';
+      return { view: 'app', page };
+    }
+    if (savedView === 'auth') {
+      return { view: 'auth', page: 'dashboard' };
+    }
+    if (savedView === 'home') {
+      return { view: 'home', page: 'dashboard' };
+    }
+  } catch {
+    // fallback
+  }
+
+  return { view: 'home', page: 'dashboard' };
+}
+
+function syncRouteToUrl(view: AppView, page: PageId) {
+  if (typeof window === 'undefined') return;
+
+  let targetHash = '';
+  if (view === 'home') {
+    targetHash = '#/home';
+  } else if (view === 'auth') {
+    targetHash = '#/auth';
+  } else {
+    targetHash = `#/${page}`;
+  }
+
+  try {
+    localStorage.setItem('csmp_current_view', view);
+    localStorage.setItem('csmp_current_page', page);
+  } catch { }
+
+  if (window.location.hash !== targetHash) {
+    window.history.replaceState(null, '', targetHash);
+  }
+}
+
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, allUsers, isAuthenticated, session } = useAuth();
+
+  const [currentView, setCurrentViewState] = useState<AppView>(() => getRouteFromHashOrStorage().view);
+  const [currentPage, setCurrentPageState] = useState<PageId>(() => getRouteFromHashOrStorage().page);
+
+  const setCurrentView = useCallback((view: AppView) => {
+    setCurrentViewState(view);
+    syncRouteToUrl(view, currentPage);
+  }, [currentPage]);
+
+  const setCurrentPage = useCallback((page: PageId) => {
+    setCurrentPageState(page);
+    setCurrentViewState('app');
+    syncRouteToUrl('app', page);
+  }, []);
+
+  const goToDashboard = useCallback(() => {
+    if (isAuthenticated && user) {
+      setCurrentViewState('app');
+      setCurrentPageState('dashboard');
+      syncRouteToUrl('app', 'dashboard');
+    } else {
+      setCurrentViewState('auth');
+      syncRouteToUrl('auth', 'dashboard');
+    }
+  }, [isAuthenticated, user]);
+
+  const goToHome = useCallback(() => {
+    setCurrentViewState('home');
+    syncRouteToUrl('home', currentPage);
+  }, [currentPage]);
+
+  const goToAuth = useCallback(() => {
+    setCurrentViewState('auth');
+    syncRouteToUrl('auth', currentPage);
+  }, [currentPage]);
+
+  // Listen to browser hash changes (e.g. Back / Forward button, manual URL changes)
+  useEffect(() => {
+    const handleHashChange = () => {
+      const route = getRouteFromHashOrStorage();
+      setCurrentViewState(route.view);
+      setCurrentPageState(route.page);
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  // Sync initial state to URL on mount
+  useEffect(() => {
+    syncRouteToUrl(currentView, currentPage);
+  }, []);
+  // All sensitive state starts empty — populated by syncWithSupabase after auth succeeds.
+  // Do NOT initialize from localStorage on cold start: unauthenticated visits must see nothing.
+  const [requests, setRequests] = useState<ServiceRequest[]>([]);
+  // Permissions start from built-in defaults; DB-synced values loaded post-auth.
+  const [permissions, setPermissions] = useState<Record<UserRole, RolePermissions>>(DEFAULT_PERMISSIONS);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [isSupabaseConnected, setIsSupabaseConnected] = useState<boolean>(false);
+
+  const [activeRequest, setActiveRequest] = useState<ServiceRequest | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [initialCreateType, setInitialCreateType] = useState<'support' | 'deposit' | 'withdraw'>('support');
+
+  const [filters, setFilters] = useState<FilterState>(initialFilters);
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' | 'warning'; id: number } | null>(null);
+
+  // Dark mode init
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    const saved = localStorage.getItem('csmp_theme');
+    if (saved) return saved === 'dark';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('csmp_theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('csmp_theme', 'light');
+    }
+  }, [isDarkMode]);
+
+  const toggleTheme = () => setIsDarkMode(prev => !prev);
+
+  const toast = useCallback((text: string, type: 'success' | 'info' | 'error' | 'warning' = 'info') => {
+    setToastMessage({ text, type, id: Date.now() });
+    setTimeout(() => {
+      setToastMessage(prev => (prev?.text === text ? null : prev));
+    }, 4000);
+  }, []);
+
+  // Fetch initial data from Supabase and listen to real-time events
+  const syncWithSupabase = useCallback(async () => {
+    try {
+      const health = await checkSupabaseHealth();
+      setIsSupabaseConnected(health.connected);
+
+      if (health.connected) {
+        const [dbReqs, dbPerms, dbNotifs, dbAudit] = await Promise.all([
+          fetchRequestsFromSupabase().catch(() => null),
+          fetchPermissionsFromSupabase().catch(() => null),
+          fetchNotificationsFromSupabase().catch(() => null),
+          fetchAuditLogsFromSupabase().catch(() => null),
+        ]);
+
+        if (dbReqs && dbReqs.length > 0) {
+          setRequests(dbReqs);
+          saveRequests(dbReqs);
+        }
+        if (dbPerms) {
+          setPermissions(dbPerms);
+          savePermissions(dbPerms);
+        }
+        if (dbNotifs && dbNotifs.length > 0) {
+          setNotifications(dbNotifs);
+          saveNotifications(dbNotifs);
+        }
+        if (dbAudit && dbAudit.length > 0) {
+          setAuditLogs(dbAudit);
+          saveAuditLogs(dbAudit);
+        }
+      }
+    } catch (err: any) {
+      console.warn('Supabase sync error (using local storage fallback):', err.message);
+      setIsSupabaseConnected(false);
+    }
+  }, []);
+
+  // Initial mount: check health and sync — only when authenticated
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    syncWithSupabase();
+
+    // Supabase Realtime Subscription Channel
+    const channel = supabase
+      .channel('csmp_realtime_updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'csmp_requests' }, () => {
+        fetchRequestsFromSupabase().then(dbReqs => {
+          if (dbReqs) {
+            setRequests(dbReqs);
+            saveRequests(dbReqs);
+          }
+        }).catch(() => { });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'csmp_notifications' }, () => {
+        fetchNotificationsFromSupabase().then(dbNotifs => {
+          if (dbNotifs) {
+            setNotifications(dbNotifs);
+            saveNotifications(dbNotifs);
+          }
+        }).catch(() => { });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'csmp_audit_logs' }, () => {
+        fetchAuditLogsFromSupabase().then(dbAudit => {
+          if (dbAudit) {
+            setAuditLogs(dbAudit);
+            saveAuditLogs(dbAudit);
+          }
+        }).catch(() => { });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isAuthenticated, syncWithSupabase]);
+
+  // Clear in-memory sensitive state when auth is lost (session expiry / sign-out)
+  useEffect(() => {
+    if (!isAuthenticated && !session) {
+      setRequests([]);
+      setNotifications([]);
+      setAuditLogs([]);
+      setPermissions(DEFAULT_PERMISSIONS);
+    }
+  }, [isAuthenticated, session]);
+
+  // Sync state if activeRequest updates
+  useEffect(() => {
+    if (activeRequest) {
+      const updated = requests.find(r => r.id === activeRequest.id);
+      if (updated) setActiveRequest(updated);
+    }
+  }, [requests]);
+
+  // Allowed pages computation
+  const userRole = user?.role || 'client';
+  const rolePerm = permissions[userRole] || permissions.client;
+  const allowedPages = rolePerm?.allowedPages || ['dashboard'];
+  const isPageAllowed = (page: PageId) => allowedPages.includes(page);
+
+  // Redirect if current page not allowed for authenticated user
+  useEffect(() => {
+    if (isAuthenticated && user && !isPageAllowed(currentPage)) {
+      setCurrentPage('dashboard');
+    }
+  }, [isAuthenticated, user?.role, permissions, currentPage]);
+
+  const openCreateModal = (type: 'support' | 'deposit' | 'withdraw' = 'support') => {
+    setInitialCreateType(type);
+    setIsCreateModalOpen(true);
+  };
+
+  const dispatchNotification = (
+    userId: string,
+    title: string,
+    message: string,
+    category: Notification['category'],
+    type: Notification['type'] = 'info',
+    requestId?: string
+  ) => {
+    const newNotif: Notification = {
+      id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      userId,
+      title,
+      message,
+      type,
+      category,
+      requestId,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    setNotifications(prev => {
+      const updated = [newNotif, ...prev];
+      saveNotifications(updated);
+      return updated;
+    });
+
+    // Save to Supabase
+    saveNotificationToSupabase(newNotif).catch(() => { });
+  };
+
+  const recordAudit = (
+    action: string,
+    targetType: AuditLog['targetType'],
+    targetId: string,
+    details: string
+  ) => {
+    const newLog: AuditLog = {
+      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      action,
+      targetType,
+      targetId,
+      details,
+      timestamp: new Date().toISOString(),
+      ipAddress: '127.0.0.1 (Supabase Auth)',
+    };
+
+    setAuditLogs(prev => {
+      const updated = [newLog, ...prev];
+      saveAuditLogs(updated);
+      return updated;
+    });
+
+    // Save to Supabase
+    saveAuditLogToSupabase(newLog).catch(() => { });
+  };
+
+  // Create Support Ticket
+  const createSupportTicket = (data: {
+    title: string;
+    description: string;
+    category?: SupportTicket['category'];
+    priority: RequestPriority;
+    remoteId?: string;
+    environment?: string;
+    browserInfo?: string;
+    attachments?: { name: string; size: number; type: string; url: string }[];
+  }): ServiceRequest => {
+    const now = new Date().toISOString();
+    const count = requests.filter(r => r.type === 'support').length + 101;
+    const ticketNumber = `TCK-${new Date().getFullYear()}-${count}`;
+
+    const newTicket: SupportTicket = {
+      id: `req_${Date.now()}`,
+      ticketNumber,
+      type: 'support',
+      title: data.title,
+      description: data.description,
+      category: data.category || 'matm',
+      remoteId: data.remoteId,
+      browserInfo: data.browserInfo || navigator.userAgent,
+      status: 'pending',
+      priority: data.priority,
+      clientId: user.id,
+      clientName: user.name,
+      clientEmail: user.email,
+      clientCompany: user.companyName,
+      createdAt: now,
+      updatedAt: now,
+      comments: [],
+      attachments: (data.attachments || []).map((att, i) => ({
+        id: `att_${Date.now()}_${i}`,
+        name: att.name,
+        size: att.size,
+        type: att.type,
+        url: att.url,
+        uploadedAt: now,
+        uploadedBy: user.name,
+      })),
+    };
+
+    const updated = [newTicket, ...requests];
+    setRequests(updated);
+    saveRequests(updated);
+
+    // Persist to Supabase
+    saveRequestToSupabase(newTicket).catch(err => {
+      console.warn('Supabase save request warning:', err.message);
+    });
+
+    recordAudit('CREATED_SUPPORT_TICKET', 'request', newTicket.id, `Ticket ${ticketNumber}: ${data.title} (${data.priority.toUpperCase()})`);
+
+    // Notify all operators and admins
+    allUsers
+      .filter(u => u.role === 'operator' || u.role === 'admin')
+      .forEach(staff => {
+        dispatchNotification(
+          staff.id,
+          `New Support Request: ${ticketNumber}`,
+          `${user.name} submitted ticket "${data.title}" (${data.priority.toUpperCase()})`,
+          'new_request',
+          data.priority === 'urgent' ? 'warning' : 'info',
+          newTicket.id
+        );
+      });
+
+    toast(`Support ticket ${ticketNumber} submitted successfully!`, 'success');
+    return newTicket;
+  };
+
+  // Create Holding Deposit Request
+  const createHoldingDeposit = (data: {
+    amount: number;
+    currency: string;
+    depositMethod: HoldingDepositRequest['depositMethod'];
+    transactionReferenceId: string;
+    senderAccountName?: string;
+    depositDate: string;
+    destinationAccount: string;
+    description: string;
+    attachments?: { name: string; size: number; type: string; url: string }[];
+  }): ServiceRequest => {
+    const now = new Date().toISOString();
+    const count = requests.filter(r => r.type === 'deposit').length + 201;
+    const ticketNumber = `HLD-${new Date().getFullYear()}-${count}`;
+
+    const newDeposit: HoldingDepositRequest = {
+      id: `req_${Date.now()}`,
+      ticketNumber,
+      type: 'deposit',
+      amount: data.amount,
+      currency: data.currency,
+      depositMethod: data.depositMethod,
+      transactionReferenceId: data.transactionReferenceId,
+      senderAccountName: data.senderAccountName || user.name,
+      depositDate: data.depositDate,
+      title: `Deposit ${data.currency} ${data.amount.toLocaleString()} via ${data.depositMethod.replace('_', ' ').toUpperCase()}`,
+      description: data.description,
+      status: 'pending',
+      priority: data.amount >= 50000 ? 'urgent' : 'high',
+      clientId: user.id,
+      clientName: user.name,
+      clientEmail: user.email,
+      clientCompany: user.companyName,
+      createdAt: now,
+      updatedAt: now,
+      comments: [],
+      attachments: (data.attachments || []).map((att, i) => ({
+        id: `att_${Date.now()}_${i}`,
+        name: att.name,
+        size: att.size,
+        type: att.type,
+        url: att.url,
+        uploadedAt: now,
+        uploadedBy: user.name,
+      })),
+    };
+
+    const updated = [newDeposit, ...requests];
+    setRequests(updated);
+    saveRequests(updated);
+
+    // Persist to Supabase
+    saveRequestToSupabase(newDeposit).catch(err => {
+      console.warn('Supabase save request warning:', err.message);
+    });
+
+    recordAudit('CREATED_DEPOSIT_REQUEST', 'request', newDeposit.id, `Deposit request ${ticketNumber} for ${data.currency} ${data.amount.toLocaleString()}`);
+
+    // Notify financial operators and admins
+    allUsers
+      .filter(u => u.role === 'operator' || u.role === 'admin')
+      .forEach(staff => {
+        dispatchNotification(
+          staff.id,
+          `Deposit Update Request: ${ticketNumber}`,
+          `${user.name} submitted a ${data.currency} ${data.amount.toLocaleString()} deposit confirmation.`,
+          'new_request',
+          'warning',
+          newDeposit.id
+        );
+      });
+
+    toast(`Deposit update request ${ticketNumber} logged. Operator will verify transaction.`, 'success');
+    return newDeposit;
+  };
+
+  // Create Holding Withdraw Request
+  const createHoldingWithdraw = (data: {
+    amount: number;
+    currency: string;
+    withdrawMethod: HoldingWithdrawRequest['withdrawMethod'];
+    beneficiaryAccountName: string;
+    beneficiaryAccountNumberOrAddress: string;
+    bankNameOrNetwork?: string;
+    swiftOrIban?: string;
+    reason?: string;
+    description: string;
+    attachments?: { name: string; size: number; type: string; url: string }[];
+  }): ServiceRequest => {
+    const now = new Date().toISOString();
+    const count = requests.filter(r => r.type === 'withdraw').length + 301;
+    const ticketNumber = `HLD-${new Date().getFullYear()}-${count}`;
+
+    const newWithdraw: HoldingWithdrawRequest = {
+      id: `req_${Date.now()}`,
+      ticketNumber,
+      type: 'withdraw',
+      amount: data.amount,
+      currency: data.currency,
+      withdrawMethod: data.withdrawMethod,
+      beneficiaryAccountName: data.beneficiaryAccountName,
+      beneficiaryAccountNumberOrAddress: data.beneficiaryAccountNumberOrAddress,
+      bankNameOrNetwork: data.bankNameOrNetwork,
+      swiftOrIban: data.swiftOrIban,
+      reason: data.reason,
+      title: `Withdraw ${data.currency} ${data.amount.toLocaleString()} to ${data.beneficiaryAccountName}`,
+      description: data.description,
+      status: 'pending',
+      priority: 'high',
+      clientId: user.id,
+      clientName: user.name,
+      clientEmail: user.email,
+      clientCompany: user.companyName,
+      createdAt: now,
+      updatedAt: now,
+      comments: [],
+      attachments: (data.attachments || []).map((att, i) => ({
+        id: `att_${Date.now()}_${i}`,
+        name: att.name,
+        size: att.size,
+        type: att.type,
+        url: att.url,
+        uploadedAt: now,
+        uploadedBy: user.name,
+      })),
+    };
+
+    const updated = [newWithdraw, ...requests];
+    setRequests(updated);
+    saveRequests(updated);
+
+    // Persist to Supabase
+    saveRequestToSupabase(newWithdraw).catch(err => {
+      console.warn('Supabase save request warning:', err.message);
+    });
+
+    recordAudit('CREATED_WITHDRAWAL_REQUEST', 'request', newWithdraw.id, `Withdrawal request ${ticketNumber} for ${data.currency} ${data.amount.toLocaleString()}`);
+
+    // Notify financial operators and admins
+    allUsers
+      .filter(u => u.role === 'operator' || u.role === 'admin')
+      .forEach(staff => {
+        dispatchNotification(
+          staff.id,
+          `Withdrawal Request: ${ticketNumber}`,
+          `${user.name} requested withdrawal of ${data.currency} ${data.amount.toLocaleString()}`,
+          'new_request',
+          'warning',
+          newWithdraw.id
+        );
+      });
+
+    toast(`Withdrawal request ${ticketNumber} submitted for compliance approval.`, 'success');
+    return newWithdraw;
+  };
+
+  // Update Status
+  const updateRequestStatus = (
+    requestId: string,
+    newStatus: RequestStatus,
+    note?: string,
+    verifiedTxId?: string
+  ) => {
+    const now = new Date().toISOString();
+    let targetReq: ServiceRequest | undefined;
+
+    const updated = requests.map(req => {
+      if (req.id !== requestId) return req;
+      const updatedReq: ServiceRequest = {
+        ...req,
+        status: newStatus,
+        updatedAt: now,
+        resolvedAt: (newStatus === 'completed' || newStatus === 'rejected') ? now : undefined,
+      };
+
+      if (newStatus === 'pending') {
+        updatedReq.resolvedAt = undefined;
+        if (req.type === 'withdraw') {
+          (updatedReq as HoldingWithdrawRequest).cmaStatus = {
+            configure: false,
+            make: false,
+            authorize: false,
+          };
+        }
+      }
+
+      if (req.type === 'deposit' && verifiedTxId) {
+        (updatedReq as HoldingDepositRequest).verifiedTransactionId = verifiedTxId;
+      }
+
+      const commentContent = note && note.trim()
+        ? `[Status changed to ${newStatus.toUpperCase().replace('_', ' ')}] ${note.trim()}`
+        : `[Status updated to ${newStatus.toUpperCase().replace('_', ' ')} by ${user.name} (${user.role.toUpperCase()})]`;
+
+      const commentObj = {
+        id: `cm_${Date.now()}`,
+        authorId: user.id,
+        authorName: user.name,
+        authorRole: user.role,
+        authorAvatar: user.avatarUrl,
+        content: commentContent,
+        isInternal: false,
+        createdAt: now,
+      };
+      updatedReq.comments = [...updatedReq.comments, commentObj];
+
+      targetReq = updatedReq;
+      return updatedReq;
+    });
+
+    setRequests(updated);
+    saveRequests(updated);
+
+    if (targetReq) {
+      setActiveRequest(targetReq);
+
+      // Persist to Supabase
+      saveRequestToSupabase(targetReq).catch((err) => {
+        console.warn('Failed to sync updated request to Supabase:', err);
+      });
+
+      recordAudit(
+        'UPDATED_REQUEST_STATUS',
+        'request',
+        requestId,
+        `Changed status of ${(targetReq as ServiceRequest).ticketNumber} to ${newStatus.toUpperCase()}`
+      );
+
+      // Notify the client
+      dispatchNotification(
+        (targetReq as ServiceRequest).clientId,
+        `Request ${(targetReq as ServiceRequest).ticketNumber} Status: ${newStatus.toUpperCase().replace('_', ' ')}`,
+        `Your request "${(targetReq as ServiceRequest).title}" has been moved to ${newStatus.replace('_', ' ')}.`,
+        'request_update',
+        newStatus === 'completed' ? 'success' : newStatus === 'rejected' ? 'error' : 'info',
+        (targetReq as ServiceRequest).id
+      );
+
+      if (newStatus === 'completed') {
+        try {
+          confetti({
+            particleCount: 80,
+            spread: 60,
+            origin: { y: 0.6 },
+          });
+        } catch {
+          // ignore if canvas unavailable
+        }
+      }
+    }
+
+    toast(`Request status updated to ${newStatus.replace('_', ' ')}`, 'success');
+  };
+
+  // Update Withdrawal CMA Step (Configure, Make, Authorize)
+  const updateWithdrawalCmaStep = (
+    requestId: string,
+    step: 'configure' | 'make' | 'authorize',
+    checked: boolean,
+    authorizedAmount?: number
+  ) => {
+    const now = new Date().toISOString();
+    let targetReq: ServiceRequest | undefined;
+
+    const stepLabelMap: Record<string, string> = {
+      configure: 'Configure (C)',
+      make: 'Make (M)',
+      authorize: 'Authorize (A)',
+    };
+
+    const updated = requests.map(req => {
+      if (req.id !== requestId || req.type !== 'withdraw') return req;
+
+      const withdrawReq = req as HoldingWithdrawRequest;
+      const currentCma = withdrawReq.cmaStatus || {};
+      const newCma: CmaStatus = {
+        ...currentCma,
+        [step]: checked,
+        [`${step}At`]: checked ? now : undefined,
+        [`${step}By`]: checked ? user.name : undefined,
+      };
+
+      let finalAuthorizedAmount = withdrawReq.authorizedAmount;
+      if (step === 'authorize') {
+        if (checked) {
+          finalAuthorizedAmount = authorizedAmount !== undefined ? authorizedAmount : (currentCma.authorizedAmount || withdrawReq.amount);
+          newCma.authorizedAmount = finalAuthorizedAmount;
+        } else {
+          finalAuthorizedAmount = undefined;
+          newCma.authorizedAmount = undefined;
+        }
+      }
+
+      // Determine new status based on CMA checkboxes:
+      // Authorize (A) checked -> automatically completed
+      let newStatus: RequestStatus = req.status;
+      let resolvedAt = req.resolvedAt;
+
+      if (step === 'authorize' && checked) {
+        newStatus = 'completed';
+        resolvedAt = now;
+      } else if (checked) {
+        if (req.status === 'pending') {
+          newStatus = 'in_progress';
+        }
+      } else {
+        if (req.status === 'completed') {
+          newStatus = 'in_progress';
+          resolvedAt = undefined;
+        }
+      }
+
+      const commentContent = step === 'authorize' && checked
+        ? `[CMA Checkpoint] Authorize (A) verified with Authorized Amount: ${withdrawReq.currency} ${finalAuthorizedAmount?.toLocaleString()} by ${user.name} (${user.role.toUpperCase()}) - Request Automatically Completed`
+        : `[CMA Checkpoint] ${stepLabelMap[step]} marked as ${checked ? 'COMPLETED' : 'PENDING'} by ${user.name} (${user.role.toUpperCase()})`;
+
+      const commentObj = {
+        id: `cm_${Date.now()}`,
+        authorId: user.id,
+        authorName: user.name,
+        authorRole: user.role,
+        authorAvatar: user.avatarUrl,
+        content: commentContent,
+        isInternal: true,
+        createdAt: now,
+      };
+
+      const updatedReq: HoldingWithdrawRequest = {
+        ...withdrawReq,
+        cmaStatus: newCma,
+        authorizedAmount: finalAuthorizedAmount,
+        status: newStatus,
+        updatedAt: now,
+        resolvedAt: resolvedAt,
+        comments: [...withdrawReq.comments, commentObj],
+      };
+
+      targetReq = updatedReq;
+      return updatedReq;
+    });
+
+    setRequests(updated);
+    saveRequests(updated);
+
+    if (targetReq) {
+      setActiveRequest(targetReq);
+      saveRequestToSupabase(targetReq).catch((err) => {
+        console.warn('Failed to sync CMA update to Supabase:', err);
+      });
+
+      recordAudit(
+        'UPDATED_WITHDRAWAL_CMA',
+        'request',
+        requestId,
+        `Updated CMA step ${stepLabelMap[step]} to ${checked ? 'COMPLETED' : 'PENDING'} on ${(targetReq as ServiceRequest).ticketNumber}`
+      );
+
+      dispatchNotification(
+        (targetReq as ServiceRequest).clientId,
+        `Withdrawal ${(targetReq as ServiceRequest).ticketNumber} Update`,
+        targetReq.status === 'completed'
+          ? `Your withdrawal ${(targetReq as ServiceRequest).ticketNumber} has been Authorized and Completed!`
+          : `Checkpoint ${stepLabelMap[step]} has been ${checked ? 'completed' : 'reset'} for your withdrawal.`,
+        'request_update',
+        targetReq.status === 'completed' ? 'success' : 'info',
+        targetReq.id
+      );
+
+      if (targetReq.status === 'completed') {
+        try {
+          confetti({
+            particleCount: 80,
+            spread: 60,
+            origin: { y: 0.6 },
+          });
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    toast(`${stepLabelMap[step]} ${checked ? 'completed' : 'reset'} successfully`, 'success');
+  };
+
+  // Assign Operator
+  const assignOperator = (requestId: string, operatorId: string) => {
+    const operator = allUsers.find(u => u.id === operatorId);
+    if (!operator) return;
+
+    const now = new Date().toISOString();
+    let targetReq: ServiceRequest | undefined;
+
+    const updated = requests.map(req => {
+      if (req.id !== requestId) return req;
+      const updatedReq = {
+        ...req,
+        assignedOperatorId: operator.id,
+        assignedOperatorName: operator.name,
+        updatedAt: now,
+        status: req.status === 'pending' ? ('in_progress' as RequestStatus) : req.status,
+      };
+      targetReq = updatedReq;
+      return updatedReq;
+    });
+
+    setRequests(updated);
+    saveRequests(updated);
+
+    if (targetReq) {
+      // Persist to Supabase
+      saveRequestToSupabase(targetReq).catch(() => { });
+
+      recordAudit(
+        'ASSIGNED_OPERATOR',
+        'request',
+        requestId,
+        `Assigned operator ${operator.name} to ${(targetReq as ServiceRequest).ticketNumber}`
+      );
+
+      dispatchNotification(
+        operator.id,
+        `Assigned to ${(targetReq as ServiceRequest).ticketNumber}`,
+        `You were assigned to "${(targetReq as ServiceRequest).title}" submitted by ${(targetReq as ServiceRequest).clientName}.`,
+        'assignment',
+        'info',
+        (targetReq as ServiceRequest).id
+      );
+    }
+
+    toast(`Assigned ${operator.name} to ticket`, 'success');
+  };
+
+  // Add Comment / Message
+  const addComment = (
+    requestId: string,
+    content: string,
+    isInternal: boolean,
+    attachments?: { name: string; size: number; type: string; url: string }[]
+  ) => {
+    const now = new Date().toISOString();
+    let targetReq: ServiceRequest | undefined;
+
+    const newComment = {
+      id: `cm_${Date.now()}`,
+      authorId: user.id,
+      authorName: user.name,
+      authorRole: user.role,
+      authorAvatar: user.avatarUrl,
+      content,
+      isInternal,
+      createdAt: now,
+      attachments: (attachments || []).map((att, i) => ({
+        id: `att_c_${Date.now()}_${i}`,
+        name: att.name,
+        size: att.size,
+        type: att.type,
+        url: att.url,
+        uploadedAt: now,
+        uploadedBy: user.name,
+      })),
+    };
+
+    const updated = requests.map(req => {
+      if (req.id !== requestId) return req;
+      const updatedReq = {
+        ...req,
+        updatedAt: now,
+        comments: [...req.comments, newComment],
+      };
+      targetReq = updatedReq;
+      return updatedReq;
+    });
+
+    setRequests(updated);
+    saveRequests(updated);
+
+    if (targetReq) {
+      setActiveRequest(targetReq);
+
+      // Persist thread history directly to Supabase
+      saveRequestToSupabase(targetReq).catch((err) => {
+        console.warn('Failed to sync comment thread history to Supabase:', err);
+      });
+
+      recordAudit(
+        isInternal ? 'ADDED_INTERNAL_NOTE' : 'POSTED_COMMENT',
+        'request',
+        requestId,
+        `${isInternal ? 'Internal Note' : 'Public Reply'} added to ${(targetReq as ServiceRequest).ticketNumber}`
+      );
+
+      // If client commented, notify assigned operator or admins
+      if (user.role === 'client') {
+        const notifyTarget = (targetReq as ServiceRequest).assignedOperatorId || 'usr_admin_1';
+        dispatchNotification(
+          notifyTarget,
+          `New reply on ${(targetReq as ServiceRequest).ticketNumber}`,
+          `${user.name}: "${content.substring(0, 70)}..."`,
+          'request_update',
+          'info',
+          (targetReq as ServiceRequest).id
+        );
+      } else if (!isInternal) {
+        // If staff commented publicly, notify client
+        dispatchNotification(
+          (targetReq as ServiceRequest).clientId,
+          `Update on ${(targetReq as ServiceRequest).ticketNumber}`,
+          `${user.name} (${user.role.toUpperCase()}): "${content.substring(0, 70)}..."`,
+          'request_update',
+          'info',
+          (targetReq as ServiceRequest).id
+        );
+      }
+    }
+
+    toast(isInternal ? 'Internal staff note saved.' : 'Message posted.', 'success');
+  };
+
+  // Delete Request (Admin Permanent Deletion)
+  const deleteRequest = (requestId: string) => {
+    const target = requests.find(r => r.id === requestId);
+    const updated = requests.filter(r => r.id !== requestId);
+    setRequests(updated);
+    saveRequests(updated);
+    if (activeRequest?.id === requestId) setActiveRequest(null);
+
+    // Delete in Supabase
+    deleteRequestFromSupabase(requestId).catch(() => { });
+
+    if (target) {
+      recordAudit('DELETED_REQUEST', 'request', requestId, `Deleted request ${target.ticketNumber}`);
+    }
+    toast('Request permanently removed.', 'info');
+  };
+
+  // Request Deletion (Submits request for admin approval)
+  const requestDeletion = (requestId: string, reason: string) => {
+    const now = new Date().toISOString();
+    let targetReq: ServiceRequest | undefined;
+
+    const updated = requests.map(req => {
+      if (req.id !== requestId) return req;
+      const updatedReq: ServiceRequest = {
+        ...req,
+        deleteRequested: true,
+        deleteRequestedBy: user.name,
+        deleteRequestedById: user.id,
+        deleteRequestedReason: reason.trim(),
+        deleteRequestedAt: now,
+        updatedAt: now,
+      };
+
+      const commentObj = {
+        id: `cm_${Date.now()}`,
+        authorId: user.id,
+        authorName: user.name,
+        authorRole: user.role,
+        authorAvatar: user.avatarUrl,
+        content: `[DELETION REQUESTED] ${user.name} (${user.role.toUpperCase()}) requested deletion of this request. Reason: "${reason.trim()}" — Awaiting Administrator Approval.`,
+        isInternal: true,
+        createdAt: now,
+      };
+      updatedReq.comments = [...updatedReq.comments, commentObj];
+
+      targetReq = updatedReq;
+      return updatedReq;
+    });
+
+    setRequests(updated);
+    saveRequests(updated);
+
+    if (targetReq) {
+      setActiveRequest(targetReq);
+      saveRequestToSupabase(targetReq).catch(() => { });
+      recordAudit(
+        'REQUESTED_REQUEST_DELETION',
+        'request',
+        requestId,
+        `Requested deletion of ${(targetReq as ServiceRequest).ticketNumber}. Reason: ${reason.trim()}`
+      );
+
+      // Notify all admins
+      allUsers
+        .filter(u => u.role === 'admin')
+        .forEach(admin => {
+          dispatchNotification(
+            admin.id,
+            `Deletion Approval Needed: ${(targetReq as ServiceRequest).ticketNumber}`,
+            `${user.name} requested deletion of ${(targetReq as ServiceRequest).ticketNumber}. Reason: ${reason.trim()}`,
+            'system',
+            'warning',
+            requestId
+          );
+        });
+    }
+
+    toast('Deletion request submitted. Awaiting administrator approval.', 'info');
+  };
+
+  // Approve Deletion (Admin approves deletion request)
+  const approveDeletion = (requestId: string) => {
+    const target = requests.find(r => r.id === requestId);
+    deleteRequest(requestId);
+    if (target && target.deleteRequestedById) {
+      dispatchNotification(
+        target.deleteRequestedById,
+        `Deletion Approved: ${target.ticketNumber}`,
+        `Administrator ${user.name} approved the deletion of ${target.ticketNumber}.`,
+        'request_update',
+        'warning'
+      );
+    }
+  };
+
+  // Reject Deletion (Admin rejects deletion request)
+  const rejectDeletion = (requestId: string) => {
+    const now = new Date().toISOString();
+    const originalReq = requests.find(r => r.id === requestId);
+    const requesterId = originalReq?.deleteRequestedById || (originalReq as any)?.delete_requested_by_id;
+    let targetReq: ServiceRequest | undefined;
+
+    const updated = requests.map(req => {
+      if (req.id !== requestId) return req;
+      const updatedReq: ServiceRequest = {
+        ...req,
+        deleteRequested: false,
+        deleteRequestedBy: undefined,
+        deleteRequestedById: undefined,
+        deleteRequestedReason: undefined,
+        deleteRequestedAt: undefined,
+        updatedAt: now,
+      };
+
+      const commentObj = {
+        id: `cm_${Date.now()}`,
+        authorId: user.id,
+        authorName: user.name,
+        authorRole: user.role,
+        authorAvatar: user.avatarUrl,
+        content: `[DELETION REJECTED] Administrator ${user.name} reviewed and REJECTED the deletion request. Request remains active.`,
+        isInternal: true,
+        createdAt: now,
+      };
+      updatedReq.comments = [...updatedReq.comments, commentObj];
+
+      targetReq = updatedReq;
+      return updatedReq;
+    });
+
+    setRequests(updated);
+    saveRequests(updated);
+
+    if (targetReq) {
+      setActiveRequest(targetReq);
+      saveRequestToSupabase(targetReq).catch(() => { });
+      recordAudit(
+        'REJECTED_REQUEST_DELETION',
+        'request',
+        requestId,
+        `Admin ${user.name} rejected deletion request for ${(targetReq as ServiceRequest).ticketNumber}`
+      );
+
+      if (requesterId) {
+        dispatchNotification(
+          requesterId,
+          `Deletion Request Rejected: ${(targetReq as ServiceRequest).ticketNumber}`,
+          `Administrator ${user.name} reviewed and rejected the deletion request for ${(targetReq as ServiceRequest).ticketNumber}.`,
+          'request_update',
+          'info',
+          requestId
+        );
+      }
+    }
+
+    toast('Deletion request rejected. Request remains active.', 'info');
+  };
+
+  // RBAC Matrix Updates
+  const updateRolePermission = (role: UserRole, updates: Partial<RolePermissions>) => {
+    const updatedRolePerm = { ...permissions[role], ...updates };
+    const updated = {
+      ...permissions,
+      [role]: updatedRolePerm,
+    };
+    setPermissions(updated);
+    savePermissions(updated);
+
+    // Save to Supabase
+    savePermissionsToSupabase(role, updatedRolePerm).catch(() => { });
+
+    recordAudit('MODIFIED_RBAC_PERMISSIONS', 'rbac', role, `Updated capabilities for role [${role.toUpperCase()}]`);
+    toast(`Permissions updated for role ${role.toUpperCase()}`, 'success');
+  };
+
+  const togglePageForRole = (role: UserRole, pageId: PageId) => {
+    const currentAllowed = permissions[role].allowedPages;
+    const isPresent = currentAllowed.includes(pageId);
+    const newPages = isPresent
+      ? currentAllowed.filter(p => p !== pageId)
+      : [...currentAllowed, pageId];
+
+    updateRolePermission(role, { allowedPages: newPages });
+  };
+
+  // Notifications helpers
+  const userNotifications = notifications.filter(
+    n => user && (n.userId === user.id || (user.role === 'admin' && n.userId === 'all_admins') || ((user.role === 'operator' || user.role === 'admin') && n.userId === 'all_operators'))
+  );
+
+  const unreadNotifCount = userNotifications.filter(n => !n.isRead).length;
+
+  const markNotificationAsRead = (id: string) => {
+    const updated = notifications.map(n => (n.id === id ? { ...n, isRead: true } : n));
+    setNotifications(updated);
+    saveNotifications(updated);
+
+    markNotificationReadInSupabase(id).catch(() => { });
+  };
+
+  const markAllNotificationsAsRead = () => {
+    const updated = notifications.map(n =>
+      user && (n.userId === user.id || (user.role === 'admin' && n.userId === 'all_admins')) ? { ...n, isRead: true } : n
+    );
+    setNotifications(updated);
+    saveNotifications(updated);
+
+    if (user) {
+      markAllNotificationsReadInSupabase(user.id).catch(() => { });
+    }
+    toast('All notifications marked as read', 'info');
+  };
+
+  const clearNotification = (id: string) => {
+    const updated = notifications.filter(n => n.id !== id);
+    setNotifications(updated);
+    saveNotifications(updated);
+  };
+
+  // Filtered requests computation
+  const filteredRequests = requests.filter(req => {
+    // Role filter: clients only see their own requests
+    if (user && user.role === 'client' && req.clientId !== user.id) {
+      return false;
+    }
+
+    // Search query
+    if (filters.searchQuery.trim()) {
+      const q = filters.searchQuery.toLowerCase();
+      const matchTitle = req.title.toLowerCase().includes(q);
+      const matchTicket = req.ticketNumber.toLowerCase().includes(q);
+      const matchClient = req.clientName.toLowerCase().includes(q);
+      const matchDesc = req.description.toLowerCase().includes(q);
+      const matchCompany = req.clientCompany?.toLowerCase().includes(q);
+      if (!matchTitle && !matchTicket && !matchClient && !matchDesc && !matchCompany) {
+        return false;
+      }
+    }
+
+    // Type filter
+    if (filters.typeFilter !== 'all' && req.type !== filters.typeFilter) {
+      return false;
+    }
+
+    // Status filter
+    if (filters.statusFilter !== 'all') {
+      if (filters.statusFilter === 'pending_deletion') {
+        if (!req.deleteRequested) return false;
+      } else if (req.status !== filters.statusFilter) {
+        return false;
+      }
+    }
+
+    // Priority filter
+    if (filters.priorityFilter !== 'all' && req.priority !== filters.priorityFilter) {
+      return false;
+    }
+
+    // Operator filter
+    if (filters.operatorFilter !== 'all') {
+      if (filters.operatorFilter === 'unassigned') {
+        if (req.assignedOperatorId) return false;
+      } else if (req.assignedOperatorId !== filters.operatorFilter) {
+        return false;
+      }
+    }
+
+    // Date range
+    if (filters.dateRange !== 'all') {
+      const created = new Date(req.createdAt).getTime();
+      const now = Date.now();
+      const oneDay = 24 * 60 * 60 * 1000;
+      if (filters.dateRange === 'today' && now - created > oneDay) return false;
+      if (filters.dateRange === '7d' && now - created > 7 * oneDay) return false;
+      if (filters.dateRange === '30d' && now - created > 30 * oneDay) return false;
+      if (filters.dateRange === '90d' && now - created > 90 * oneDay) return false;
+    }
+
+    return true;
+  });
+
+  const resetFilters = () => setFilters(initialFilters);
+
+  const triggerExportCSV = () => {
+    const roleStr = user?.role || 'user';
+    exportRequestsToCSV(filteredRequests, `requests_${roleStr}_${new Date().toISOString().split('T')[0]}.csv`);
+    toast(`Exported ${filteredRequests.length} requests to CSV.`, 'success');
+  };
+
+  const resetAllDemoData = () => {
+    resetToDemoData();
+    // After clearing storage, reset in-memory state to safe empty defaults.
+    // DB sync will re-populate when the user next triggers a manual sync.
+    setRequests([]);
+    setPermissions(DEFAULT_PERMISSIONS);
+    setNotifications([]);
+    setAuditLogs([]);
+    toast('Platform reset to original demo seed dataset.', 'info');
+  };
+
+  return (
+    <AppContext.Provider
+      value={{
+        currentView,
+        setCurrentView,
+        goToDashboard,
+        goToHome,
+        goToAuth,
+        currentPage,
+        setCurrentPage,
+        allowedPages,
+        isPageAllowed,
+        requests,
+        filteredRequests,
+        activeRequest,
+        setActiveRequest,
+        isCreateModalOpen,
+        setIsCreateModalOpen,
+        initialCreateType,
+        openCreateModal,
+        createSupportTicket,
+        createHoldingDeposit,
+        createHoldingWithdraw,
+        updateRequestStatus,
+        updateWithdrawalCmaStep,
+        assignOperator,
+        addComment,
+        deleteRequest,
+        requestDeletion,
+        approveDeletion,
+        rejectDeletion,
+        permissions,
+        updateRolePermission,
+        togglePageForRole,
+        notifications,
+        userNotifications,
+        unreadNotifCount,
+        markNotificationAsRead,
+        markAllNotificationsAsRead,
+        clearNotification,
+        auditLogs,
+        filters,
+        setFilters,
+        resetFilters,
+        isDarkMode,
+        toggleTheme,
+        isSupabaseConnected,
+        syncWithSupabase,
+        triggerExportCSV,
+        resetAllDemoData,
+        toast,
+        toastMessage,
+      }}
+    >
+      {children}
+    </AppContext.Provider>
+  );
+};
+
+export const useApp = () => {
+  const context = useContext(AppContext);
+  if (!context) {
+    throw new Error('useApp must be used within an AppProvider');
+  }
+  return context;
+};
