@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
+import { formatDateIST } from '../../lib/dateUtils';
 import {
   Clock,
   RefreshCw,
@@ -120,7 +121,7 @@ export const PendingApprovalScreen: React.FC = () => {
             <div className="flex justify-between items-center text-slate-400">
               <span>Submitted On:</span>
               <span className="text-slate-300">
-                {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Just now'}
+                {user?.createdAt ? formatDateIST(user.createdAt) : 'Just now'}
               </span>
             </div>
             <div className="flex justify-between items-center text-slate-400">

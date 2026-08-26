@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { SupportTicket } from '../../types';
 import { StatusBadge, PriorityBadge, DeletionPendingBadge } from '../common/Badge';
+import { formatShortDateIST, formatDateTimeIST } from '../../lib/dateUtils';
 import {
   Headphones,
   Bug,
@@ -15,7 +16,9 @@ import {
   Paperclip,
   MessageSquare,
   ExternalLink,
-  Download
+  Download,
+  Inbox,
+  RotateCcw
 } from 'lucide-react';
 
 export const SupportTicketsView: React.FC = () => {
@@ -39,7 +42,6 @@ export const SupportTicketsView: React.FC = () => {
 
   const canCreate = user?.role === 'client' && (permissions[user?.role || 'client']?.canCreateRequest ?? true);
   const isStaff = user.role === 'admin' || user.role === 'operator';
-
 
   const categories = [
     { id: 'all', label: 'All Issues', icon: Headphones, count: supportTickets.length },
@@ -85,7 +87,7 @@ export const SupportTicketsView: React.FC = () => {
           {isStaff && (
             <button
               onClick={triggerExportCSV}
-              className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2"
+              className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 shadow-xs"
             >
               <Download className="w-4 h-4 text-slate-400" />
               <span>Export CSV</span>
@@ -134,67 +136,127 @@ export const SupportTicketsView: React.FC = () => {
           })}
         </div>
 
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search support tickets by keyword, client, or error..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search support tickets by keyword, client, or error..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          {(selectedCategory !== 'all' || searchQuery.trim()) && (
+            <button
+              onClick={() => {
+                setSelectedCategory('all');
+                setSearchQuery('');
+              }}
+              className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Reset Filters
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Ticket Grid */}
-      <div className="grid grid-cols-1 gap-2">
-        {filteredTickets.map((ticket) => (
-          <div
-            key={ticket.id}
-            onClick={() => setActiveRequest(ticket)}
-            className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                  {ticket.ticketNumber}
-                </span>
-                <div className="flex items-center gap-1.5">
-                  {ticket.deleteRequested && <DeletionPendingBadge />}
-                  <PriorityBadge priority={ticket.priority} />
-                  <StatusBadge status={ticket.status} />
+      {/* Ticket Grid / Empty State */}
+      {filteredTickets.length === 0 ? (
+        <div className="p-12 text-center rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center">
+          <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mb-3">
+            <Inbox className="w-6 h-6" />
+          </div>
+          <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-200">
+            No support tickets found
+          </h3>
+          <p className="text-xs text-slate-400 max-w-sm mt-1">
+            {searchQuery.trim() || selectedCategory !== 'all'
+              ? 'No tickets match your active filter or search keyword. Try clearing search filters.'
+              : 'There are no support tickets in your queue right now.'}
+          </p>
+          <div className="mt-4 flex items-center gap-3">
+            {(searchQuery.trim() || selectedCategory !== 'all') && (
+              <button
+                onClick={() => {
+                  setSelectedCategory('all');
+                  setSearchQuery('');
+                }}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-1.5"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Clear Filters
+              </button>
+            )}
+            {canCreate && (
+              <button
+                onClick={() => openCreateModal('support')}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white transition-colors flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Create Support Ticket
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-2">
+          {filteredTickets.map((ticket) => (
+            <div
+              key={ticket.id}
+              onClick={() => setActiveRequest(ticket)}
+              className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                      {ticket.ticketNumber}
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      {formatShortDateIST(ticket.createdAt)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {ticket.deleteRequested && <DeletionPendingBadge />}
+                    <PriorityBadge priority={ticket.priority} />
+                    <StatusBadge status={ticket.status} />
+                  </div>
                 </div>
-              </div>
-              <div className="border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-400">
-                <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-                  <h3 className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2">
-                    {ticket.title}
-                  </h3>
-                  <span className="px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 capitalize font-medium">
-                    {ticket.category.replace('_', ' ')}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-3 shrink-0">
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 line-clamp-3 leading-relaxed">
-                    {ticket.description}
-                  </p>
-                  <>
-                    {ticket.attachments.length > 0 && (
-                      <span className="inline-flex items-center gap-1 text-slate-500" title={`${ticket.attachments.length} attachments`}>
-                        <Paperclip className="w-3.5 h-3.5" />
-                        <span>{ticket.attachments.length}</span>
+                <div className="border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                    <h3 className="font-bold text-sm text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2">
+                      {ticket.title}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 capitalize font-medium">
+                      {ticket.category.replace('_', ' ')}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 shrink-0">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 line-clamp-3 leading-relaxed">
+                      {ticket.description}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {ticket.attachments.length > 0 && (
+                        <span className="inline-flex items-center gap-1 text-slate-500" title={`${ticket.attachments.length} attachments`}>
+                          <Paperclip className="w-3.5 h-3.5" />
+                          <span>{ticket.attachments.length}</span>
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1 text-slate-500" title={`${ticket.comments.length} replies`}>
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>{ticket.comments.length}</span>
                       </span>
-                    )}
-                    <span className="inline-flex items-center gap-1 text-slate-500" title={`${ticket.comments.length} replies`}>
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      <span>{ticket.comments.length}</span>
-                    </span></>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

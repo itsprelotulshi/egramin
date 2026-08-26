@@ -6,6 +6,7 @@ import {
   Notification,
   AuditLog,
 } from '../types';
+import { formatDateTimeIST } from './dateUtils';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Storage keys
@@ -256,8 +257,8 @@ export function exportRequestsToCSV(requests: ServiceRequest[], filename = 'clie
       `"${amount}"`,
       `"${currency}"`,
       `"${methodOrCat}"`,
-      `"${new Date(req.createdAt).toLocaleString()}"`,
-      `"${new Date(req.updatedAt).toLocaleString()}"`,
+      `"${formatDateTimeIST(req.createdAt)}"`,
+      `"${formatDateTimeIST(req.updatedAt)}"`,
     ].join(',');
   });
 

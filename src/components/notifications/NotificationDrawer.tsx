@@ -1,5 +1,6 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
+import { formatDateTimeIST } from '../../lib/dateUtils';
 import { Bell, Check, Trash2, X, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -122,7 +123,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ isOpen, 
                           {notif.message}
                         </p>
                         <div className="flex items-center gap-3 mt-2 text-[11px] text-slate-400">
-                          <span>{new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span>{formatDateTimeIST(notif.createdAt)}</span>
                           {notif.requestId && (
                             <span className="inline-flex items-center gap-0.5 text-indigo-600 dark:text-indigo-400 font-medium">
                               View Ticket <ExternalLink className="w-3 h-3" />

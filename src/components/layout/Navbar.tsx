@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { RoleBadge } from '../common/Badge';
+import { formatTimeIST } from '../../lib/dateUtils';
 import {
   Search,
   Plus,
@@ -147,7 +148,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
             onClick={handleManualSync}
             disabled={isSyncing}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-800 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/60 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 transition-all active:scale-95 disabled:opacity-60"
-            title={`Last synced: ${lastSyncedAt.toLocaleTimeString()} • Click to refresh from Supabase`}
+            title={`Last synced: ${formatTimeIST(lastSyncedAt)} IST • Click to refresh from Supabase`}
             aria-label="Refresh latest updates from database"
           >
             <RefreshCw

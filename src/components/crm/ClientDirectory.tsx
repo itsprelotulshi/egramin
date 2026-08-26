@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { User, UserRole, ServiceRequest } from '../../types';
 import { StatusBadge, TypeBadge, RoleBadge } from '../common/Badge';
+import { formatDateIST } from '../../lib/dateUtils';
 import {
   Users,
   Search,
@@ -471,13 +472,7 @@ export const ClientDirectory: React.FC = () => {
 
                         {/* Joined Date */}
                         <td className="py-3.5 px-3 text-xs text-slate-500 dark:text-slate-400 font-mono">
-                          {targetUser.createdAt
-                            ? new Date(targetUser.createdAt).toLocaleDateString([], {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                              })
-                            : '—'}
+                          {formatDateIST(targetUser.createdAt)}
                         </td>
 
                         {/* Governance Actions */}

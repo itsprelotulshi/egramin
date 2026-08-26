@@ -17,6 +17,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { RequestType, RequestStatus, RequestPriority } from '../../types';
+import { formatShortDateIST } from '../../lib/dateUtils';
 
 interface RequestListProps {
   title?: string;
@@ -407,7 +408,7 @@ export const RequestList: React.FC<RequestListProps> = ({
 
                     {/* Created Date */}
                     <td className="py-4 pr-4 text-right text-xs text-slate-400 font-mono">
-                      {new Date(req.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                      {formatShortDateIST(req.createdAt)}
                     </td>
                   </tr>
                 ))}

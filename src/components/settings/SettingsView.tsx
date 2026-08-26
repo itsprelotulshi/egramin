@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { resetToDemoData } from '../../lib/storage';
 import { checkSupabaseHealth } from '../../lib/supabase';
+import { formatTimeIST } from '../../lib/dateUtils';
 
 export const SettingsView: React.FC = () => {
   const { user, token, session, openAuthModal, openProfileModal } = useAuth();
@@ -227,7 +228,7 @@ export const SettingsView: React.FC = () => {
                 <div className="flex justify-between truncate">
                   <span className="text-slate-400">Expires:</span>
                   <span className="font-mono text-slate-600 dark:text-slate-400">
-                    {session.expires_at ? new Date(session.expires_at * 1000).toLocaleTimeString() : 'Active'}
+                    {session.expires_at ? `${formatTimeIST(session.expires_at * 1000)} IST` : 'Active'}
                   </span>
                 </div>
               )}

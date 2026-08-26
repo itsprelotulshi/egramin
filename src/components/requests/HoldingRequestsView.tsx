@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { HoldingDepositRequest, HoldingWithdrawRequest } from '../../types';
 import { StatusBadge, PriorityBadge, DeletionPendingBadge } from '../common/Badge';
+import { formatShortDateIST, formatDateIST } from '../../lib/dateUtils';
 import {
   WalletCards,
   ArrowDownRight,
@@ -16,7 +17,9 @@ import {
   FileText,
   ShieldCheck,
   Search,
-  ExternalLink
+  ExternalLink,
+  Inbox,
+  RotateCcw
 } from 'lucide-react';
 
 export const HoldingRequestsView: React.FC = () => {
@@ -141,104 +144,176 @@ export const HoldingRequestsView: React.FC = () => {
           </button>
         </div>
 
-        <div className="relative w-full sm:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search wire ref, amount, client..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search wire ref, amount, client..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          {(activeTab !== 'all' || searchQuery.trim()) && (
+            <button
+              onClick={() => {
+                setActiveTab('all');
+                setSearchQuery('');
+              }}
+              className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 shrink-0"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Reset
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Holding Requests List */}
-      <div className="grid grid-cols-1 md:grid-cols-1 gap-2">
-        {displayList.map(item => {
-          const isDeposit = item.type === 'deposit';
-          const dep = item as HoldingDepositRequest;
-          const wdr = item as HoldingWithdrawRequest;
+      {/* Holding Requests List / Empty State */}
+      {displayList.length === 0 ? (
+        <div className="p-12 text-center rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col items-center justify-center">
+          <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mb-3">
+            <Inbox className="w-6 h-6" />
+          </div>
+          <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-200">
+            No limit (holding) requests found
+          </h3>
+          <p className="text-xs text-slate-400 max-w-sm mt-1">
+            {searchQuery.trim() || activeTab !== 'all'
+              ? 'No deposit or withdrawal requests match your search filter.'
+              : 'There are no active deposit or withdrawal requests in your queue.'}
+          </p>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+            {(searchQuery.trim() || activeTab !== 'all') && (
+              <button
+                onClick={() => {
+                  setActiveTab('all');
+                  setSearchQuery('');
+                }}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-1.5"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Clear Filters
+              </button>
+            )}
+            {canCreate && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => openCreateModal('deposit')}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors flex items-center gap-1"
+                >
+                  <ArrowDownRight className="w-3.5 h-3.5" />
+                  Deposit Update
+                </button>
+                <button
+                  onClick={() => openCreateModal('withdraw')}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors flex items-center gap-1"
+                >
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                  Withdraw Request
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-1 gap-2">
+          {displayList.map(item => {
+            const isDeposit = item.type === 'deposit';
+            const dep = item as HoldingDepositRequest;
+            const wdr = item as HoldingWithdrawRequest;
 
-          return (
-            <div
-              key={item.id}
-              onClick={() => setActiveRequest(item)}
-              className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
-            >
-              <div className=''>
-                <div className="flex items-center justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                      {item.ticketNumber}
-                    </span>
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${isDeposit
-                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                        : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                        }`}
-                    >
-                      {isDeposit ? <ArrowDownRight className="w-3.5 h-3.5" /> : <ArrowUpRight className="w-3.5 h-3.5" />}
-                      {isDeposit ? 'Deposit Update' : 'Withdrawal'}
-                    </span>
+            return (
+              <div
+                key={item.id}
+                onClick={() => setActiveRequest(item)}
+                className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+              >
+                <div className=''>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                        {item.ticketNumber}
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${isDeposit
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                          : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                          }`}
+                      >
+                        {isDeposit ? <ArrowDownRight className="w-3.5 h-3.5" /> : <ArrowUpRight className="w-3.5 h-3.5" />}
+                        {isDeposit ? 'Deposit Update' : 'Withdrawal'}
+                      </span>
+                      <span className="text-[11px] text-slate-400 font-mono">
+                        {formatShortDateIST(item.createdAt)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {item.deleteRequested && <DeletionPendingBadge />}
+                      <StatusBadge status={item.status} />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    {item.deleteRequested && <DeletionPendingBadge />}
-                    <StatusBadge status={item.status} />
-                  </div>
-                </div>
-                <div className='grid grid-cols-2 gap-2'>
-                  <div>
-                    <div className="text-xl font-extrabold text-slate-900 dark:text-white">
-                      {isDeposit ? dep.currency : wdr.currency} {(isDeposit ? dep.amount : wdr.amount)?.toLocaleString()}
+                  <div className='grid grid-cols-2 gap-2'>
+                    <div>
+                      <div className="text-xl font-extrabold text-slate-900 dark:text-white">
+                        {isDeposit ? dep.currency : wdr.currency} {(isDeposit ? dep.amount : wdr.amount)?.toLocaleString()}
+                      </div>
+
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
+                        {item.description}
+                      </div>
                     </div>
 
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
-                      {item.description}
+                    {/* Proof & Reference detail */}
+                    <div className="p-2.5 rounded-xl text-xs space-y-1">
+                      {isDeposit ? (
+                        <>
+                          <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
+                            <span className="text-slate-400">Method:</span>
+                            <span className="font-semibold capitalize">{dep.depositMethod?.replace('_', ' ')}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
+                            <span className="text-slate-400">Wire Ref / TxID:</span>
+                            <span className="font-mono font-medium truncate max-w-45">{dep.transactionReferenceId}</span>
+                          </div>
+                          {dep.depositDate && (
+                            <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
+                              <span className="text-slate-400">Deposit Date:</span>
+                              <span className="font-mono text-slate-500">{formatDateIST(dep.depositDate)}</span>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-end gap-1 text-slate-600 dark:text-slate-300">
+                            <span className="text-slate-400">Beneficiary:</span>
+                            <span className="font-semibold truncate max-w-45">{wdr.beneficiaryAccountName}</span>
+                          </div>
+                          <div className="flex items-center justify-end gap-1 text-slate-600 dark:text-slate-300">
+                            <span className="text-slate-400">Account/IBAN:</span>
+                            <span className="font-mono font-medium truncate max-w-45">{wdr.beneficiaryAccountNumberOrAddress}</span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
+                </div>
 
-                  {/* Proof & Reference detail */}
-                  <div className="p-2.5 rounded-xl text-xs space-y-1">
-                    {isDeposit ? (
-                      <>
-                        <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
-                          <span className="text-slate-400">Method:</span>
-                          <span className="font-semibold capitalize">{dep.depositMethod?.replace('_', ' ')}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
-                          <span className="text-slate-400">Wire Ref / TxID:</span>
-                          <span className="font-mono font-medium truncate max-w-45">{dep.transactionReferenceId}</span>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="flex items-center justify-end gap-1 text-slate-600 dark:text-slate-300">
-                          <span className="text-slate-400">Beneficiary:</span>
-                          <span className="font-semibold truncate max-w-45">{wdr.beneficiaryAccountName}</span>
-                        </div>
-                        <div className="flex items-center justify-end gap-1 text-slate-600 dark:text-slate-300">
-                          <span className="text-slate-400">Account/IBAN:</span>
-                          <span className="font-mono font-medium truncate max-w-45">{wdr.beneficiaryAccountNumberOrAddress}</span>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                <div className="mt-1 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                  <span className="font-medium text-slate-600 dark:text-slate-300 truncate max-w-37.5">
+                    {item.clientName} ({item.clientCompany || 'Client'})
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-semibold group-hover:underline">
+                    Inspect Details <ExternalLink className="w-3 h-3" />
+                  </span>
                 </div>
               </div>
-
-              <div className="mt-1 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-400">
-                <span className="font-medium text-slate-600 dark:text-slate-300 truncate max-w-37.5">
-                  {item.clientName} ({item.clientCompany || 'Client'})
-                </span>
-                <span className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-semibold group-hover:underline">
-                  Inspect Proof <ExternalLink className="w-3 h-3" />
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

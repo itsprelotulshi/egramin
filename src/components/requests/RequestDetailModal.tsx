@@ -10,6 +10,7 @@ import {
   UserRole,
 } from '../../types';
 import { StatusBadge, PriorityBadge, TypeBadge, RoleBadge, DeletionPendingBadge } from '../common/Badge';
+import { formatDateIST, formatTimeIST, formatDateTimeIST } from '../../lib/dateUtils';
 import {
   X,
   User,
@@ -279,12 +280,12 @@ export const RequestDetailModal: React.FC = () => {
                   <span>•</span>
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3.5 h-3.5" />
-                    {new Date(req.createdAt).toLocaleDateString()}
+                    {formatDateIST(req.createdAt)}
                   </span>
                   <span>•</span>
                   <span className="flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5" />
-                    {new Date(req.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {formatTimeIST(req.createdAt)}
                   </span>
                 </div>
               </div>
@@ -295,7 +296,7 @@ export const RequestDetailModal: React.FC = () => {
                   <span>{isWithdraw && isStaff ? 'Withdrawal Lifecycle & CMA Verification' : 'Lifecycle Progress'}</span>
                   {req.resolvedAt && (
                     <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
-                      Resolved: {new Date(req.resolvedAt).toLocaleDateString()}
+                      Resolved: {formatDateTimeIST(req.resolvedAt)}
                     </span>
                   )}
                 </div>
@@ -949,13 +950,13 @@ export const RequestDetailModal: React.FC = () => {
                     <div>
                       <span className="text-slate-400">Created At</span>
                       <div className="font-medium text-slate-700 dark:text-slate-300">
-                        {new Date(req.createdAt).toLocaleString()}
+                        {formatDateTimeIST(req.createdAt)}
                       </div>
                     </div>
                     <div>
                       <span className="text-slate-400">Last Updated</span>
                       <div className="font-medium text-slate-700 dark:text-slate-300">
-                        {new Date(req.updatedAt).toLocaleString()}
+                        {formatDateTimeIST(req.updatedAt)}
                       </div>
                     </div>
                   </div>
@@ -1044,12 +1045,7 @@ export const RequestDetailModal: React.FC = () => {
                                   }`}
                               >
                                 <span className='px-2 font-bold'>{c.authorName}</span>
-                                {(() => {
-                                  const d = c.createdAt ? new Date(c.createdAt) : new Date();
-                                  return !isNaN(d.getTime())
-                                    ? `${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • ${d.toLocaleDateString()}`
-                                    : 'Just now';
-                                })()}
+                                {formatDateTimeIST(c.createdAt)}
                               </span>
                             </div>
                           </div>

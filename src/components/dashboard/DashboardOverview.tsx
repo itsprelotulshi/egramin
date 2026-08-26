@@ -2,6 +2,7 @@ import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { StatusBadge, PriorityBadge, TypeBadge } from '../common/Badge';
+import { formatHeaderDateIST, formatShortDateIST } from '../../lib/dateUtils';
 import {
   Layers,
   Clock,
@@ -57,7 +58,7 @@ export const DashboardOverview: React.FC = () => {
               {user.role} Workspace
             </span>
             <span className="text-xs text-slate-400">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
+              {formatHeaderDateIST()}
             </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
@@ -316,7 +317,7 @@ export const DashboardOverview: React.FC = () => {
                     <StatusBadge status={req.status} />
                   </td>
                   <td className="py-3.5 pl-3 text-right text-xs text-slate-400">
-                    {new Date(req.updatedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                    {formatShortDateIST(req.updatedAt)}
                   </td>
                 </tr>
               ))}

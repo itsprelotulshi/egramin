@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { RoleBadge } from '../common/Badge';
+import { formatDateTimeIST } from '../../lib/dateUtils';
 import {
   FileText,
   Search,
@@ -95,13 +96,7 @@ export const AuditLogsView: React.FC = () => {
                 <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                   {/* Timestamp */}
                   <td className="py-3.5 px-4 font-mono text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                    {new Date(log.timestamp).toLocaleString([], {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      second: '2-digit',
-                    })}
+                    {formatDateTimeIST(log.timestamp)}
                   </td>
 
                   {/* Actor */}
