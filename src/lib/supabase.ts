@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import {
   User,
   UserRole,
@@ -16,41 +16,103 @@ import {
   PageId,
 } from '../types';
 
-const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const rawSupabaseAnonKey =
+const supabaseUrl: string = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey: string =
   import.meta.env.VITE_SUPABASE_ANON_KEY ||
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  '';
 
 export const isSupabaseConfigured: boolean = Boolean(
-  rawSupabaseUrl &&
-  rawSupabaseAnonKey &&
-  rawSupabaseUrl.startsWith('http') &&
-  !rawSupabaseUrl.includes('placeholder') &&
-  !rawSupabaseAnonKey.includes('your-supabase-anon-key')
+  supabaseUrl &&
+  supabaseAnonKey &&
+  supabaseUrl.startsWith('http')
 );
 
-// Safe fallback URL and key so createClient() never throws at module load time
-const supabaseUrl: string = isSupabaseConfigured && rawSupabaseUrl
-  ? rawSupabaseUrl
-  : 'https://placeholder.supabase.co';
-
-const supabaseAnonKey: string = isSupabaseConfigured && rawSupabaseAnonKey
-  ? rawSupabaseAnonKey
-  : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder-anon-key';
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    // ── Security: keep the JWT in memory only (not localStorage) ──────────
-    // persistSession: false prevents the access_token / refresh_token from
-    // being written to localStorage where XSS scripts could read it.
-    // Trade-off: the session ends when the tab is closed (no cross-tab
-    // persistence). autoRefreshToken still silently renews the JWT while the
-    // tab is open. detectSessionInUrl handles magic-link / OAuth redirects.
-    persistSession: false,
-    autoRefreshToken: isSupabaseConfigured,
-    detectSessionInUrl: isSupabaseConfigured,
-  },
-});
+// If Supabase credentials are configured via environment variables, initialize the live client.
+// Otherwise, export a safe mock proxy to prevent startup crashes when running in offline/demo mode.
+export const supabase: SupabaseClient = isSupabaseConfigured
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        // ── Security: keep the JWT in memory only (not localStorage) ──────────
+        // persistSession: false prevents the access_token / refresh_token from
+        // being written to localStorage where XSS scripts could read it.
+        // Trade-off: the session ends when the tab is closed (no cross-tab
+        // persistence). autoRefreshToken still silently renews the JWT while the
+        // tab is open. detectSessionInUrl handles magic-link / OAuth redirects.
+        persistSession: false,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    })
+  : (new Proxy(
+      {},
+      {
+        get(_, prop) {
+          if (prop === 'auth') {
+            return {
+              getSession: async () => ({ data: { session: null }, error: null }),
+              onAuthStateChange: () => ({
+                data: {
+                  subscription: {
+                    unsubscribe: () => {},
+                  },
+                },
+              }),
+              refreshSession: async () => ({
+                data: { session: null, user: null },
+                error: new Error('Supabase credentials not configured in environment'),
+              }),
+              signInWithPassword: async () => ({
+                data: { session: null, user: null },
+                error: new Error('Supabase credentials not configured in environment'),
+              }),
+              signUp: async () => ({
+                data: { session: null, user: null },
+                error: new Error('Supabase credentials not configured in environment'),
+              }),
+              signInWithOtp: async () => ({
+                data: {},
+                error: new Error('Supabase credentials not configured in environment'),
+              }),
+              resetPasswordForEmail: async () => ({
+                data: {},
+                error: new Error('Supabase credentials not configured in environment'),
+              }),
+              signOut: async () => ({ error: null }),
+              updateUser: async () => ({
+                data: { user: null },
+                error: new Error('Supabase credentials not configured in environment'),
+              }),
+            };
+          }
+          if (prop === 'from') {
+            return () => {
+              const builder: any = {
+                select: () => builder,
+                order: () => builder,
+                limit: () => builder,
+                eq: () => builder,
+                or: () => builder,
+                upsert: async () => ({ data: null, error: new Error('Supabase credentials not configured in environment') }),
+                insert: async () => ({ data: null, error: new Error('Supabase credentials not configured in environment') }),
+                update: () => builder,
+                delete: () => builder,
+                then: (resolve: any) => resolve({ data: [], error: null }),
+              };
+              return builder;
+            };
+          }
+          if (prop === 'channel' || prop === 'removeChannel') {
+            return () => ({
+              on: () => ({ subscribe: () => ({}) }),
+              subscribe: () => ({}),
+              unsubscribe: () => {},
+            });
+          }
+          return () => {};
+        },
+      }
+    ) as unknown as SupabaseClient);
 
 // -------------------------------------------------------------
 // Type mappers (DB Snake_Case <-> Frontend CamelCase)
