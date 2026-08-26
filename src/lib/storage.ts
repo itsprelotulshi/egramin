@@ -49,7 +49,7 @@ function stripPii(user: User): SafeUserCache {
 export const DEFAULT_PERMISSIONS: Record<UserRole, RolePermissions> = {
   admin: {
     role: 'admin',
-    allowedPages: ['dashboard', 'support', 'holding', 'all-requests', 'clients', 'analytics', 'rbac', 'audit-logs', 'settings'],
+    allowedPages: ['dashboard', 'support', 'holding', 'all-requests', 'clients', 'analytics', 'rbac', 'audit-logs', 'notifications', 'settings'],
     canCreateRequest: false,
     canChangeStatus: true,
     canAssignOperator: true,
@@ -61,7 +61,7 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, RolePermissions> = {
   },
   operator: {
     role: 'operator',
-    allowedPages: ['dashboard', 'support', 'holding', 'all-requests', 'clients', 'analytics'],
+    allowedPages: ['dashboard', 'support', 'holding', 'all-requests', 'clients', 'analytics', 'notifications'],
     canCreateRequest: false,
     canChangeStatus: true,
     canAssignOperator: true,
@@ -73,7 +73,7 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, RolePermissions> = {
   },
   client: {
     role: 'client',
-    allowedPages: ['dashboard', 'support', 'holding'],
+    allowedPages: ['dashboard', 'support', 'holding', 'notifications'],
     canCreateRequest: true,
     canChangeStatus: false,
     canAssignOperator: false,

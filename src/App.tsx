@@ -22,19 +22,19 @@ import { ClientDirectory } from './components/crm/ClientDirectory';
 import { AnalyticsView } from './components/analytics/AnalyticsView';
 import { RolePermissionMatrix } from './components/rbac/RolePermissionMatrix';
 import { AuditLogsView } from './components/audit/AuditLogsView';
+import { NotificationLogsView } from './components/notifications/NotificationLogsView';
 import { SettingsView } from './components/settings/SettingsView';
 
 import { ShieldAlert, ArrowLeft, Sparkles, RefreshCw } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
-  const { currentPage, setCurrentPage, permissions } = useApp();
+  const { currentPage, setCurrentPage, permissions, isPageAllowed } = useApp();
   const { user } = useAuth();
 
   const userRole = user?.role || 'client';
 
   // Check if current user has RBAC access to this page
-  const userAllowedPages = permissions[userRole]?.allowedPages || ['dashboard'];
-  const hasAccess = userAllowedPages.includes(currentPage);
+  const hasAccess = isPageAllowed(currentPage);
 
   const renderPage = () => {
     if (!hasAccess) {
@@ -77,6 +77,8 @@ const MainLayout: React.FC = () => {
         return <RolePermissionMatrix />;
       case 'audit-logs':
         return <AuditLogsView />;
+      case 'notifications':
+        return <NotificationLogsView />;
       case 'settings':
         return <SettingsView />;
       default:

@@ -11,6 +11,7 @@ export type PageId =
   | 'analytics'
   | 'rbac'
   | 'audit-logs'
+  | 'notifications'
   | 'settings';
 
 export interface User {

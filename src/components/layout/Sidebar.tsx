@@ -11,6 +11,7 @@ import {
   BarChart3,
   ShieldCheck,
   ScrollText,
+  Bell,
   Settings,
   Info,
   ChevronRight,
@@ -35,6 +36,7 @@ export const Sidebar: React.FC = () => {
     setCurrentPage,
     isPageAllowed,
     requests,
+    unreadNotifCount,
     isMobileSidebarOpen,
     closeMobileSidebar,
     themeConfig,
@@ -90,6 +92,12 @@ export const Sidebar: React.FC = () => {
       id: 'audit-logs',
       label: 'Audit Trail',
       icon: ScrollText,
+    },
+    {
+      id: 'notifications',
+      label: 'Notification Logs',
+      icon: Bell,
+      badgeCount: () => unreadNotifCount,
     },
     {
       id: 'settings',

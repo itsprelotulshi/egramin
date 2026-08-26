@@ -39,6 +39,8 @@ import {
   markAllNotificationsReadInSupabase,
   fetchAuditLogsFromSupabase,
   saveAuditLogToSupabase,
+  mapDbNotification,
+  mapDbRequest,
   checkSupabaseHealth
 } from '../lib/supabase';
 import { ThemeConfig, getStoredTheme, applyTheme, DEFAULT_THEME } from '../lib/theme';
@@ -434,8 +436,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           saveRequests(dbReqs);
         }
         if (dbPerms) {
-          setPermissions(dbPerms);
-          savePermissions(dbPerms);
+          // Merge with DEFAULT_PERMISSIONS so any newly introduced pages
+          // (e.g. 'notifications') are present even in stale DB permission rows.
+          const merged: Record<string, any> = { ...dbPerms };
+          (Object.keys(DEFAULT_PERMISSIONS) as UserRole[]).forEach(role => {
+            if (merged[role]) {
+              const dbAllowed: PageId[] = merged[role].allowedPages ?? [];
+              const defaultAllowed: PageId[] = DEFAULT_PERMISSIONS[role].allowedPages;
+              merged[role] = {
+                ...merged[role],
+                allowedPages: Array.from(new Set([...dbAllowed, ...defaultAllowed.filter(p => DEFAULT_PERMISSIONS[role].allowedPages.includes(p))])),
+              };
+            }
+          });
+          setPermissions(merged as Record<UserRole, RolePermissions>);
+          savePermissions(merged as Record<UserRole, RolePermissions>);
         }
         if (dbNotifs && dbNotifs.length > 0) {
           setNotifications(dbNotifs);
@@ -458,24 +473,115 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     syncWithSupabase();
 
-    // Supabase Realtime Subscription Channel
+    // 1. Cross-Tab Live Synchronization via BroadcastChannel
+    let bc: BroadcastChannel | null = null;
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      bc = new BroadcastChannel('csmp_live_sync');
+      bc.onmessage = (event) => {
+        if (event.data?.type === 'NOTIFICATION_DISPATCHED' && event.data?.payload) {
+          const newNotif = event.data.payload as Notification;
+          setNotifications(prev => {
+            if (prev.some(n => n.id === newNotif.id)) return prev;
+            const updated = [newNotif, ...prev];
+            saveNotifications(updated);
+            return updated;
+          });
+
+          if (user) {
+            const isForUser =
+              newNotif.userId === user.id ||
+              newNotif.userId === 'all' ||
+              (newNotif.userId === 'all_staff' && user.role !== 'client') ||
+              (newNotif.userId === 'all_operators' && user.role === 'operator') ||
+              (newNotif.userId === 'all_admins' && user.role === 'admin');
+
+            if (isForUser && !newNotif.isRead) {
+              toast(`${newNotif.title}: ${newNotif.message}`, newNotif.type === 'error' ? 'error' : newNotif.type === 'warning' ? 'warning' : 'info');
+            }
+          }
+        } else if (event.data?.type === 'REQUEST_UPDATED' || event.data?.type === 'REQUEST_CREATED') {
+          fetchRequestsFromSupabase().then(dbReqs => {
+            if (dbReqs) {
+              setRequests(dbReqs);
+              saveRequests(dbReqs);
+            }
+          }).catch(() => { });
+        }
+      };
+    }
+
+    // 2. Supabase Realtime Subscription Channel
     const channel = supabase
       .channel('csmp_realtime_updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'csmp_requests' }, () => {
-        fetchRequestsFromSupabase().then(dbReqs => {
-          if (dbReqs) {
-            setRequests(dbReqs);
-            saveRequests(dbReqs);
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'csmp_requests' }, (payload: any) => {
+        if (payload.new) {
+          try {
+            const updatedReq = mapDbRequest(payload.new);
+            setRequests(prev => {
+              const exists = prev.some(r => r.id === updatedReq.id);
+              const updated = exists ? prev.map(r => r.id === updatedReq.id ? updatedReq : r) : [updatedReq, ...prev];
+              saveRequests(updated);
+              return updated;
+            });
+            if (activeRequest && activeRequest.id === updatedReq.id) {
+              setActiveRequest(updatedReq);
+            }
+          } catch {
+            fetchRequestsFromSupabase().then(dbReqs => {
+              if (dbReqs) {
+                setRequests(dbReqs);
+                saveRequests(dbReqs);
+              }
+            }).catch(() => { });
           }
-        }).catch(() => { });
+        } else {
+          fetchRequestsFromSupabase().then(dbReqs => {
+            if (dbReqs) {
+              setRequests(dbReqs);
+              saveRequests(dbReqs);
+            }
+          }).catch(() => { });
+        }
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'csmp_notifications' }, () => {
-        fetchNotificationsFromSupabase().then(dbNotifs => {
-          if (dbNotifs) {
-            setNotifications(dbNotifs);
-            saveNotifications(dbNotifs);
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'csmp_notifications' }, (payload: any) => {
+        if (payload.new) {
+          try {
+            const newNotif = mapDbNotification(payload.new);
+            setNotifications(prev => {
+              const exists = prev.some(n => n.id === newNotif.id);
+              const updated = exists ? prev.map(n => n.id === newNotif.id ? newNotif : n) : [newNotif, ...prev];
+              saveNotifications(updated);
+              return updated;
+            });
+
+            if (user) {
+              const isForUser =
+                newNotif.userId === user.id ||
+                newNotif.userId === 'all' ||
+                (newNotif.userId === 'all_staff' && user.role !== 'client') ||
+                (newNotif.userId === 'all_operators' && user.role === 'operator') ||
+                (newNotif.userId === 'all_admins' && user.role === 'admin');
+
+              if (isForUser && !newNotif.isRead) {
+                toast(`${newNotif.title}: ${newNotif.message}`, newNotif.type === 'error' ? 'error' : newNotif.type === 'warning' ? 'warning' : 'info');
+              }
+            }
+          } catch {
+            fetchNotificationsFromSupabase().then(dbNotifs => {
+              if (dbNotifs) {
+                setNotifications(dbNotifs);
+                saveNotifications(dbNotifs);
+              }
+            }).catch(() => { });
           }
-        }).catch(() => { });
+        } else {
+          fetchNotificationsFromSupabase().then(dbNotifs => {
+            if (dbNotifs) {
+              setNotifications(dbNotifs);
+              saveNotifications(dbNotifs);
+            }
+          }).catch(() => { });
+        }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'csmp_audit_logs' }, () => {
         fetchAuditLogsFromSupabase().then(dbAudit => {
@@ -487,10 +593,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
       .subscribe();
 
+    // 3. Heartbeat Polling Interval (every 4 seconds) to guarantee sync across distributed instances
+    const heartbeatInterval = setInterval(() => {
+      fetchNotificationsFromSupabase().then(dbNotifs => {
+        if (dbNotifs && dbNotifs.length > 0) {
+          setNotifications(dbNotifs);
+          saveNotifications(dbNotifs);
+        }
+      }).catch(() => { });
+
+      fetchRequestsFromSupabase().then(dbReqs => {
+        if (dbReqs && dbReqs.length > 0) {
+          setRequests(dbReqs);
+          saveRequests(dbReqs);
+        }
+      }).catch(() => { });
+    }, 4000);
+
     return () => {
       supabase.removeChannel(channel);
+      if (bc) bc.close();
+      clearInterval(heartbeatInterval);
     };
-  }, [isAuthenticated, syncWithSupabase]);
+  }, [isAuthenticated, user, syncWithSupabase, toast]);
 
   // Clear in-memory sensitive state when auth is lost (session expiry / sign-out)
   useEffect(() => {
@@ -511,9 +636,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [requests]);
 
   // Allowed pages computation
+  // Merge stored/Supabase permissions with DEFAULT_PERMISSIONS so any newly
+  // introduced pages (e.g. 'notifications') are always present, even for
+  // permissions rows that were saved before that page existed.
   const userRole = user?.role || 'client';
   const rolePerm = permissions[userRole] || permissions.client;
-  const allowedPages = rolePerm?.allowedPages || ['dashboard'];
+  const defaultAllowed = DEFAULT_PERMISSIONS[userRole]?.allowedPages ?? [];
+  const storedAllowed = rolePerm?.allowedPages ?? [];
+  const allowedPages: PageId[] = Array.from(new Set([...storedAllowed, ...defaultAllowed.filter(p => DEFAULT_PERMISSIONS[userRole]?.allowedPages.includes(p))]));
   const isPageAllowed = (page: PageId) => allowedPages.includes(page);
 
   // Redirect if current page not allowed for authenticated user
@@ -554,7 +684,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return updated;
     });
 
-    // Save to Supabase
+    // Broadcast to other tabs via BroadcastChannel
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        const bc = new BroadcastChannel('csmp_live_sync');
+        bc.postMessage({ type: 'NOTIFICATION_DISPATCHED', payload: newNotif });
+        bc.close();
+      } catch { /* not supported */ }
+    }
+
+    // Show in-tab toast for notifications relevant to the current user
+    const isForCurrentUser =
+      newNotif.userId === user.id ||
+      newNotif.userId === 'all' ||
+      (newNotif.userId === 'all_staff' && user.role !== 'client') ||
+      (newNotif.userId === 'all_operators' && user.role === 'operator') ||
+      (newNotif.userId === 'all_admins' && user.role === 'admin');
+
+    if (isForCurrentUser) {
+      toast(
+        `${newNotif.title}\n${newNotif.message}`,
+        newNotif.type === 'error' ? 'error' : newNotif.type === 'warning' ? 'warning' : 'success'
+      );
+    }
+
+    // Save to Supabase (triggers Realtime on other sessions/devices)
     saveNotificationToSupabase(newNotif).catch(() => { });
   };
 
@@ -642,19 +796,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     recordAudit('CREATED_SUPPORT_TICKET', 'request', newTicket.id, `Ticket ${ticketNumber}: ${data.title} (${data.priority.toUpperCase()})`);
 
-    // Notify all operators and admins
-    allUsers
-      .filter(u => u.role === 'operator' || u.role === 'admin')
-      .forEach(staff => {
-        dispatchNotification(
-          staff.id,
-          `New Support Request: ${ticketNumber}`,
-          `${user.name} submitted ticket "${data.title}" (${data.priority.toUpperCase()})`,
-          'new_request',
-          data.priority === 'urgent' ? 'warning' : 'info',
-          newTicket.id
-        );
-      });
+    // 1. Notify the submitting client
+    dispatchNotification(
+      user.id,
+      `Support Ticket Created: ${ticketNumber}`,
+      `Your ticket "${data.title}" (${data.priority.toUpperCase()}) was logged successfully.`,
+      'new_request',
+      'info',
+      newTicket.id
+    );
+
+    // 2. Broadcast to all operations staff and admins
+    dispatchNotification(
+      'all_staff',
+      `New Support Request: ${ticketNumber}`,
+      `${user.name} submitted ticket "${data.title}" (${data.priority.toUpperCase()})`,
+      'new_request',
+      data.priority === 'urgent' ? 'warning' : 'info',
+      newTicket.id
+    );
 
     toast(`Support ticket ${ticketNumber} submitted successfully!`, 'success');
     return newTicket;
@@ -719,19 +879,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     recordAudit('CREATED_DEPOSIT_REQUEST', 'request', newDeposit.id, `Deposit request ${ticketNumber} for ${data.currency} ${data.amount.toLocaleString()}`);
 
-    // Notify financial operators and admins
-    allUsers
-      .filter(u => u.role === 'operator' || u.role === 'admin')
-      .forEach(staff => {
-        dispatchNotification(
-          staff.id,
-          `Deposit Update Request: ${ticketNumber}`,
-          `${user.name} submitted a ${data.currency} ${data.amount.toLocaleString()} deposit confirmation.`,
-          'new_request',
-          'warning',
-          newDeposit.id
-        );
-      });
+    // 1. Notify the submitting client
+    dispatchNotification(
+      user.id,
+      `Deposit Request Submitted: ${ticketNumber}`,
+      `Deposit update for ${data.currency} ${data.amount.toLocaleString()} is pending operator verification.`,
+      'new_request',
+      'info',
+      newDeposit.id
+    );
+
+    // 2. Broadcast to financial operators and admins
+    dispatchNotification(
+      'all_staff',
+      `Deposit Update Request: ${ticketNumber}`,
+      `${user.name} submitted a ${data.currency} ${data.amount.toLocaleString()} deposit confirmation.`,
+      'new_request',
+      'warning',
+      newDeposit.id
+    );
 
     toast(`Deposit update request ${ticketNumber} logged. Operator will verify transaction.`, 'success');
     return newDeposit;
@@ -758,6 +924,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `req_${Date.now()}`,
       ticketNumber,
       type: 'withdraw',
+      title: `Withdraw ${data.currency} ${data.amount.toLocaleString()} to ${data.beneficiaryAccountName}`,
+      description: data.description,
       amount: data.amount,
       currency: data.currency,
       withdrawMethod: data.withdrawMethod,
@@ -766,8 +934,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       bankNameOrNetwork: data.bankNameOrNetwork,
       swiftOrIban: data.swiftOrIban,
       reason: data.reason,
-      title: `Withdraw ${data.currency} ${data.amount.toLocaleString()} to ${data.beneficiaryAccountName}`,
-      description: data.description,
       status: 'pending',
       priority: 'high',
       clientId: user.id,
@@ -799,19 +965,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     recordAudit('CREATED_WITHDRAWAL_REQUEST', 'request', newWithdraw.id, `Withdrawal request ${ticketNumber} for ${data.currency} ${data.amount.toLocaleString()}`);
 
-    // Notify financial operators and admins
-    allUsers
-      .filter(u => u.role === 'operator' || u.role === 'admin')
-      .forEach(staff => {
-        dispatchNotification(
-          staff.id,
-          `Withdrawal Request: ${ticketNumber}`,
-          `${user.name} requested withdrawal of ${data.currency} ${data.amount.toLocaleString()}`,
-          'new_request',
-          'warning',
-          newWithdraw.id
-        );
-      });
+    // 1. Notify the submitting client
+    dispatchNotification(
+      user.id,
+      `Withdrawal Request Logged: ${ticketNumber}`,
+      `Payout request for ${data.currency} ${data.amount.toLocaleString()} submitted for compliance checks.`,
+      'new_request',
+      'info',
+      newWithdraw.id
+    );
+
+    // 2. Broadcast to staff and compliance admins
+    dispatchNotification(
+      'all_staff',
+      `Withdrawal Request: ${ticketNumber}`,
+      `${user.name} requested withdrawal of ${data.currency} ${data.amount.toLocaleString()}`,
+      'new_request',
+      'warning',
+      newWithdraw.id
+    );
 
     toast(`Withdrawal request ${ticketNumber} submitted for compliance approval.`, 'success');
     return newWithdraw;
@@ -889,14 +1061,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         `Changed status of ${(targetReq as ServiceRequest).ticketNumber} to ${newStatus.toUpperCase()}`
       );
 
-      // Notify the client
+      const reqItem = targetReq as ServiceRequest;
+      const isApproved = newStatus === 'completed';
+      const isRejected = newStatus === 'rejected';
+
+      const clientTitle = isApproved
+        ? `Request Approved: ${reqItem.ticketNumber}`
+        : isRejected
+          ? `Request Rejected: ${reqItem.ticketNumber}`
+          : `Request In Progress: ${reqItem.ticketNumber}`;
+
+      const clientMsg = isApproved
+        ? `Your request "${reqItem.title}" has been reviewed and APPROVED by ${user.name}.${note && note.trim() ? ` Note: ${note.trim()}` : ''}`
+        : isRejected
+          ? `Your request "${reqItem.title}" was REJECTED by ${user.name}.${note && note.trim() ? ` Reason: ${note.trim()}` : ''}`
+          : `Your request "${reqItem.title}" has been moved to In Progress by ${user.name}.`;
+
+      const staffTitle = isApproved
+        ? `Approved: ${reqItem.ticketNumber}`
+        : isRejected
+          ? `Rejected: ${reqItem.ticketNumber}`
+          : `Status Update: ${reqItem.ticketNumber}`;
+
+      const staffMsg = isApproved
+        ? `${user.name} (${user.role.toUpperCase()}) approved request "${reqItem.title}" submitted by ${reqItem.clientName}.`
+        : isRejected
+          ? `${user.name} (${user.role.toUpperCase()}) rejected request "${reqItem.title}" for ${reqItem.clientName}.${note && note.trim() ? ` Reason: ${note.trim()}` : ''}`
+          : `${user.name} updated ${reqItem.ticketNumber} to ${newStatus.toUpperCase().replace('_', ' ')}.`;
+
+      // 1. Dispatch directly to the requesting client
       dispatchNotification(
-        (targetReq as ServiceRequest).clientId,
-        `Request ${(targetReq as ServiceRequest).ticketNumber} Status: ${newStatus.toUpperCase().replace('_', ' ')}`,
-        `Your request "${(targetReq as ServiceRequest).title}" has been moved to ${newStatus.replace('_', ' ')}.`,
+        reqItem.clientId,
+        clientTitle,
+        clientMsg,
         'request_update',
-        newStatus === 'completed' ? 'success' : newStatus === 'rejected' ? 'error' : 'info',
-        (targetReq as ServiceRequest).id
+        isApproved ? 'success' : isRejected ? 'error' : 'info',
+        reqItem.id
+      );
+
+      // 2. Broadcast to staff and admin logs
+      dispatchNotification(
+        'all_staff',
+        staffTitle,
+        staffMsg,
+        'request_update',
+        isApproved ? 'success' : isRejected ? 'error' : 'info',
+        reqItem.id
       );
 
       if (newStatus === 'completed') {
@@ -1366,9 +1576,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Notifications helpers
-  const userNotifications = notifications.filter(
-    n => user && (n.userId === user.id || (user.role === 'admin' && n.userId === 'all_admins') || ((user.role === 'operator' || user.role === 'admin') && n.userId === 'all_operators'))
-  );
+  const userNotifications = notifications.filter(n => {
+    if (!user) return false;
+    if (n.userId === user.id) return true;
+    if (n.userId === 'all') return true;
+    if (user.role === 'admin') return true; // Administrators see all system & broadcast notifications
+    if (n.userId === 'all_staff') return user.role !== 'client';
+    if (n.userId === 'all_operators') return user.role === 'operator';
+    return false;
+  });
 
   const unreadNotifCount = userNotifications.filter(n => !n.isRead).length;
 
@@ -1381,8 +1597,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const markAllNotificationsAsRead = () => {
+    const userNotifIds = new Set(userNotifications.map(n => n.id));
     const updated = notifications.map(n =>
-      user && (n.userId === user.id || (user.role === 'admin' && n.userId === 'all_admins')) ? { ...n, isRead: true } : n
+      userNotifIds.has(n.id) ? { ...n, isRead: true } : n
     );
     setNotifications(updated);
     saveNotifications(updated);

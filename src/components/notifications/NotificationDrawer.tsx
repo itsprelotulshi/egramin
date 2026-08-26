@@ -17,6 +17,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ isOpen, 
     markAllNotificationsAsRead,
     clearNotification,
     setActiveRequest,
+    setCurrentPage,
     requests,
   } = useApp();
 
@@ -150,10 +151,20 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ isOpen, 
           </div>
 
           {/* Footer Info */}
-          <div className="p-3 border-t border-slate-200 dark:border-slate-800 text-center bg-slate-50 dark:bg-slate-900/50">
-            <span className="text-[11px] text-slate-400">
-              Real-time In-App Notification Center
+          <div className="p-3.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 text-xs">
+            <span className="text-[11px] text-slate-400 font-medium">
+              Live Alert Center
             </span>
+            <button
+              onClick={() => {
+                onClose();
+                setCurrentPage('notifications');
+              }}
+              className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
+            >
+              <span>Open Full Logs Page</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </button>
           </div>
         </motion.div>
       </div>

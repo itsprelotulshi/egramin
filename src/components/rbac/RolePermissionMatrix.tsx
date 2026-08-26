@@ -42,6 +42,7 @@ export const RolePermissionMatrix: React.FC = () => {
     { id: 'analytics', name: 'Analytics & SLA Reporting', desc: 'Recharts visualizations, operator workload, and volume trends' },
     { id: 'rbac', name: 'Role & RBAC Matrix', desc: 'Security access control matrix and page assignment engine' },
     { id: 'audit-logs', name: 'Audit Trail & Logs', desc: 'Immutable activity log capturing status transitions and logins' },
+    { id: 'notifications', name: 'Notification Logs Center', desc: 'Real-time alert dispatch log, queue triggers, and client notifications' },
     { id: 'settings', name: 'Settings & Supabase Config', desc: 'Account credentials, simulated Supabase DB link, and JWT inspect' },
   ];
 
