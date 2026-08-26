@@ -304,14 +304,21 @@ git push origin main
    - **Output location**: `dist`
 5. Click **Review + Create**, then click **Create**.
 
-#### Step 3: Configure Environment Variables in Azure
-1. In the Azure Portal, open your newly created Static Web App resource.
-2. Go to **Settings > Environment variables** (or **Configuration**).
-3. Add the following Application Settings:
+#### Step 3: Configure Environment Variables in GitHub & Azure
+1. In your GitHub Repository, go to **Settings > Secrets and variables > Actions**.
+2. Under **Repository secrets**, ensure the following secrets are added:
    - `VITE_SUPABASE_URL`: `https://[your-project-ref].supabase.co`
    - `VITE_SUPABASE_ANON_KEY`: `[your-supabase-anon-key]`
-4. Click **Apply** / **Save**.
-5. Trigger a GitHub Action run (or push a commit) to build the app with these environment variables embedded.
+   - `GEMINI_API_KEY`: *(Optional)* `[your-gemini-api-key]`
+3. In your Azure Static Web Apps GitHub Actions workflow (`.github/workflows/azure-static-web-apps-*.yml`), ensure the `env:` block passes these secrets to the `Azure/static-web-apps-deploy@v1` build step:
+   ```yaml
+   env:
+     VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+     VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+     GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+   ```
+4. *(Optional for Backend / API)* In Azure Portal, you can also set these under **Static Web App > Environment variables** for any Azure Functions backend endpoints.
+5. Push a commit or re-run the workflow to build the app with your live Supabase credentials baked in.
 
 #### Step 4: Custom Domain & Free SSL
 1. In your Static Web App, navigate to **Custom domains**.

@@ -145,7 +145,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Session refresh error:', err.message);
       return { success: false, error: err.message };
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Initial mount & Supabase Auth state listener
@@ -334,7 +334,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             details: `Signed in via email/password (${email.trim()})`,
             timestamp: new Date().toISOString(),
             ipAddress: 'Supabase Auth',
-          }).catch(() => {});
+          }).catch(() => { });
         }
 
         return { success: true };
@@ -401,7 +401,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             details: `New account registered: ${metadata.name} (${email.trim()}) as [${(metadata.role || 'client').toUpperCase()}]`,
             timestamp: new Date().toISOString(),
             ipAddress: 'Supabase Auth',
-          }).catch(() => {});
+          }).catch(() => { });
 
           return { success: true, message: 'Account registered! Awaiting administrator approval.' };
         } else {
@@ -444,7 +444,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         details: `Magic link / OTP sign-in requested for: ${email.trim()}`,
         timestamp: new Date().toISOString(),
         ipAddress: 'Supabase Auth',
-      }).catch(() => {});
+      }).catch(() => { });
 
       return {
         success: true,
@@ -478,7 +478,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         details: `Password reset email requested for: ${email.trim()}`,
         timestamp: new Date().toISOString(),
         ipAddress: 'Supabase Auth',
-      }).catch(() => {});
+      }).catch(() => { });
 
       return {
         success: true,
@@ -506,7 +506,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ipAddress: 'Supabase Auth',
       };
       logAuditEvent(user, 'USER_SIGNED_OUT', 'user', user.id, `${user.name} (${user.email}) signed out`);
-      saveAuditLogToSupabase(logEntry).catch(() => {});
+      saveAuditLogToSupabase(logEntry).catch(() => { });
     }
 
     try {
@@ -581,7 +581,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (user?.id === userId) {
       setUserState(updatedUser);
-      setCurrentUser(updatedUser);
     }
 
     try {
@@ -611,7 +610,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (user?.id === userId) {
       setUserState(updatedUser);
-      setCurrentUser(updatedUser);
     }
 
     try {
@@ -641,7 +639,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (user?.id === userId) {
       setUserState(updatedUser);
-      setCurrentUser(updatedUser);
     }
 
     try {

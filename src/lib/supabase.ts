@@ -32,87 +32,87 @@ export const isSupabaseConfigured: boolean = Boolean(
 // Otherwise, export a safe mock proxy to prevent startup crashes when running in offline/demo mode.
 export const supabase: SupabaseClient = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        // ── Security: keep the JWT in memory only (not localStorage) ──────────
-        // persistSession: false prevents the access_token / refresh_token from
-        // being written to localStorage where XSS scripts could read it.
-        // Trade-off: the session ends when the tab is closed (no cross-tab
-        // persistence). autoRefreshToken still silently renews the JWT while the
-        // tab is open. detectSessionInUrl handles magic-link / OAuth redirects.
-        persistSession: false,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-      },
-    })
+    auth: {
+      // ── Security: keep the JWT in memory only (not localStorage) ──────────
+      // persistSession: false prevents the access_token / refresh_token from
+      // being written to localStorage where XSS scripts could read it.
+      // Trade-off: the session ends when the tab is closed (no cross-tab
+      // persistence). autoRefreshToken still silently renews the JWT while the
+      // tab is open. detectSessionInUrl handles magic-link / OAuth redirects.
+      persistSession: false,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  })
   : (new Proxy(
-      {},
-      {
-        get(_, prop) {
-          if (prop === 'auth') {
-            return {
-              getSession: async () => ({ data: { session: null }, error: null }),
-              onAuthStateChange: () => ({
-                data: {
-                  subscription: {
-                    unsubscribe: () => {},
-                  },
+    {},
+    {
+      get(_, prop) {
+        if (prop === 'auth') {
+          return {
+            getSession: async () => ({ data: { session: null }, error: null }),
+            onAuthStateChange: () => ({
+              data: {
+                subscription: {
+                  unsubscribe: () => { },
                 },
-              }),
-              refreshSession: async () => ({
-                data: { session: null, user: null },
-                error: new Error('Supabase credentials not configured in environment'),
-              }),
-              signInWithPassword: async () => ({
-                data: { session: null, user: null },
-                error: new Error('Supabase credentials not configured in environment'),
-              }),
-              signUp: async () => ({
-                data: { session: null, user: null },
-                error: new Error('Supabase credentials not configured in environment'),
-              }),
-              signInWithOtp: async () => ({
-                data: {},
-                error: new Error('Supabase credentials not configured in environment'),
-              }),
-              resetPasswordForEmail: async () => ({
-                data: {},
-                error: new Error('Supabase credentials not configured in environment'),
-              }),
-              signOut: async () => ({ error: null }),
-              updateUser: async () => ({
-                data: { user: null },
-                error: new Error('Supabase credentials not configured in environment'),
-              }),
+              },
+            }),
+            refreshSession: async () => ({
+              data: { session: null, user: null },
+              error: new Error('env configuration error'),
+            }),
+            signInWithPassword: async () => ({
+              data: { session: null, user: null },
+              error: new Error('env configuration error'),
+            }),
+            signUp: async () => ({
+              data: { session: null, user: null },
+              error: new Error('env configuration error'),
+            }),
+            signInWithOtp: async () => ({
+              data: {},
+              error: new Error('env configuration error'),
+            }),
+            resetPasswordForEmail: async () => ({
+              data: {},
+              error: new Error('env configuration error'),
+            }),
+            signOut: async () => ({ error: null }),
+            updateUser: async () => ({
+              data: { user: null },
+              error: new Error('env configuration error'),
+            }),
+          };
+        }
+        if (prop === 'from') {
+          return () => {
+            const builder: any = {
+              select: () => builder,
+              order: () => builder,
+              limit: () => builder,
+              eq: () => builder,
+              or: () => builder,
+              upsert: async () => ({ data: null, error: new Error('env configuration error') }),
+              insert: async () => ({ data: null, error: new Error('env configuration error') }),
+              update: () => builder,
+              delete: () => builder,
+              then: (resolve: any) => resolve({ data: [], error: null }),
             };
-          }
-          if (prop === 'from') {
-            return () => {
-              const builder: any = {
-                select: () => builder,
-                order: () => builder,
-                limit: () => builder,
-                eq: () => builder,
-                or: () => builder,
-                upsert: async () => ({ data: null, error: new Error('Supabase credentials not configured in environment') }),
-                insert: async () => ({ data: null, error: new Error('Supabase credentials not configured in environment') }),
-                update: () => builder,
-                delete: () => builder,
-                then: (resolve: any) => resolve({ data: [], error: null }),
-              };
-              return builder;
-            };
-          }
-          if (prop === 'channel' || prop === 'removeChannel') {
-            return () => ({
-              on: () => ({ subscribe: () => ({}) }),
-              subscribe: () => ({}),
-              unsubscribe: () => {},
-            });
-          }
-          return () => {};
-        },
-      }
-    ) as unknown as SupabaseClient);
+            return builder;
+          };
+        }
+        if (prop === 'channel' || prop === 'removeChannel') {
+          return () => ({
+            on: () => ({ subscribe: () => ({}) }),
+            subscribe: () => ({}),
+            unsubscribe: () => { },
+          });
+        }
+        return () => { };
+      },
+    }
+  ) as unknown as SupabaseClient);
 
 // -------------------------------------------------------------
 // Type mappers (DB Snake_Case <-> Frontend CamelCase)
