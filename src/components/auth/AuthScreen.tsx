@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth, AuthModalMode } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { UserRole } from '../../types';
+import { isValidEmail, isValidPhoneNumber, formatFullPhoneNumber, COUNTRY_CODES } from '../../lib/validators';
 import {
   Sparkles,
   Lock,
   Mail,
   User,
   Building,
+  Phone,
   ArrowRight,
   ArrowLeft,
   Eye,
@@ -20,7 +22,8 @@ import {
   WalletCards,
   Headphones,
   Moon,
-  Sun
+  Sun,
+  Globe
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -31,17 +34,20 @@ export const AuthScreen: React.FC = () => {
     signInWithOtp,
     resetPasswordForEmail,
   } = useAuth();
-  const { goToHome, setCurrentView } = useApp();
+  const { goToHome, setCurrentView, toast } = useApp();
 
   const [mode, setMode] = useState<AuthModalMode>('signin');
 
   // Form inputs
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [name, setName] = useState('');
   const [role, setRole] = useState<UserRole>('client');
   const [companyName, setCompanyName] = useState('');
+  const [countryCode, setCountryCode] = useState('+91');
   const [phoneNumber, setPhoneNumber] = useState('');
 
   // UI state
@@ -68,6 +74,17 @@ export const AuthScreen: React.FC = () => {
     });
   };
 
+  const clearFormInputs = () => {
+    setName('');
+    setEmail('');
+    setPassword('');
+    setConfirmPassword('');
+    setCompanyName('');
+    setPhoneNumber('');
+    setCountryCode('+91');
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+  };
 
   const handleModeSwitch = (newMode: AuthModalMode) => {
     setErrorMsg(null);
@@ -82,65 +99,108 @@ export const AuthScreen: React.FC = () => {
     setIsLoading(true);
 
     try {
+      const trimmedEmail = email.trim();
+
+      // Common Email Format Validation across all auth modes
+      if (!trimmedEmail) {
+        setErrorMsg('Please enter your email address.');
+        setIsLoading(false);
+        return;
+      }
+
+      if (!isValidEmail(trimmedEmail)) {
+        setErrorMsg('Please enter a valid email address (e.g. name@company.com).');
+        setIsLoading(false);
+        return;
+      }
+
       if (mode === 'signin') {
-        if (!email || !password) {
-          setErrorMsg('Please enter your email and password.');
+        if (!password) {
+          setErrorMsg('Please enter your password.');
           setIsLoading(false);
           return;
         }
-        const res = await signInWithPassword(email, password);
+
+        const res = await signInWithPassword(trimmedEmail, password);
         if (res.success) {
           setCurrentView('app');
         } else {
           setErrorMsg(res.error || 'Authentication failed. Please verify your credentials or select a 1-click demo persona.');
         }
       } else if (mode === 'signup') {
-        if (!email || !password || !name) {
-          setErrorMsg('Please fill in your name, email, and password.');
+        if (!name.trim()) {
+          setErrorMsg('Please enter your full name.');
           setIsLoading(false);
           return;
         }
+
+        if (!password) {
+          setErrorMsg('Please enter a password.');
+          setIsLoading(false);
+          return;
+        }
+
         if (password.length < 6) {
-          setErrorMsg('Password must be at least 6 characters.');
+          setErrorMsg('Password must be at least 6 characters long.');
           setIsLoading(false);
           return;
         }
-        const res = await signUpWithPassword(email, password, {
-          name,
+
+        if (!confirmPassword) {
+          setErrorMsg('Please confirm your password.');
+          setIsLoading(false);
+          return;
+        }
+
+        if (password !== confirmPassword) {
+          setErrorMsg('Passwords do not match. Please verify your confirm password.');
+          setIsLoading(false);
+          return;
+        }
+
+        if (phoneNumber.trim() && !isValidPhoneNumber(phoneNumber.trim())) {
+          setErrorMsg('Please enter a valid mobile number (7-15 digits).');
+          setIsLoading(false);
+          return;
+        }
+
+        const fullPhone = phoneNumber.trim()
+          ? formatFullPhoneNumber(countryCode, phoneNumber.trim())
+          : undefined;
+
+        const res = await signUpWithPassword(trimmedEmail, password, {
+          name: name.trim(),
           role,
           companyName: companyName.trim() || undefined,
-          phoneNumber: phoneNumber.trim() || undefined,
+          phoneNumber: fullPhone,
         });
 
         if (!res.success) {
           setErrorMsg(res.error || 'Registration failed.');
         } else {
-          setSuccessMsg(res.message || 'Account created successfully!');
-          setTimeout(() => setCurrentView('app'), 1200);
+          // Clear all input boxes on successful sign up
+          clearFormInputs();
+          // Switch tab directly to Login screen
+          setMode('signin');
+          const completionMsg = res.message || 'Account registered successfully! Please sign in with your email and password.';
+          setSuccessMsg(completionMsg);
+          toast(completionMsg, 'success');
         }
       } else if (mode === 'magic') {
-        if (!email) {
-          setErrorMsg('Please enter your email address.');
-          setIsLoading(false);
-          return;
-        }
-        const res = await signInWithOtp(email);
+        const res = await signInWithOtp(trimmedEmail);
         if (!res.success) {
           setErrorMsg(res.error || 'Failed to send magic link.');
         } else {
-          setSuccessMsg(res.message || 'Magic link dispatched!');
+          setSuccessMsg(res.message || 'Magic link dispatched to your email address!');
+          toast('Magic sign-in link sent!', 'success');
         }
       } else if (mode === 'reset') {
-        if (!email) {
-          setErrorMsg('Please enter your account email.');
-          setIsLoading(false);
-          return;
-        }
-        const res = await resetPasswordForEmail(email);
+        const res = await resetPasswordForEmail(trimmedEmail);
         if (!res.success) {
-          setErrorMsg(res.error || 'Password reset failed.');
+          setErrorMsg(res.error || 'Password reset request failed.');
         } else {
-          setSuccessMsg(res.message || 'Password recovery email sent!');
+          setSuccessMsg(res.message || 'Password recovery instructions sent to your email!');
+          toast('Password reset email sent!', 'info');
         }
       }
     } finally {
@@ -246,6 +306,7 @@ export const AuthScreen: React.FC = () => {
             <div className="flex items-center p-1 bg-slate-950/80 rounded-xl border border-slate-800 text-xs font-bold">
               <button
                 type="button"
+                id="tab-signin-btn"
                 onClick={() => handleModeSwitch('signin')}
                 className={`flex-1 py-2 rounded-lg transition-all ${mode === 'signin'
                   ? 'bg-indigo-600 text-white shadow-md'
@@ -256,6 +317,7 @@ export const AuthScreen: React.FC = () => {
               </button>
               <button
                 type="button"
+                id="tab-signup-btn"
                 onClick={() => handleModeSwitch('signup')}
                 className={`flex-1 py-2 rounded-lg transition-all ${mode === 'signup'
                   ? 'bg-indigo-600 text-white shadow-md'
@@ -266,6 +328,7 @@ export const AuthScreen: React.FC = () => {
               </button>
               <button
                 type="button"
+                id="tab-magic-btn"
                 onClick={() => handleModeSwitch('magic')}
                 className={`flex-1 py-2 rounded-lg transition-all ${mode === 'magic'
                   ? 'bg-indigo-600 text-white shadow-md'
@@ -303,8 +366,8 @@ export const AuthScreen: React.FC = () => {
             )}
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Sign Up Fields */}
+            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+              {/* Sign Up Specific Fields */}
               {mode === 'signup' && (
                 <>
                   <div>
@@ -316,6 +379,7 @@ export const AuthScreen: React.FC = () => {
                       <input
                         type="text"
                         required
+                        id="signup-name-input"
                         placeholder="Elena Vance"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
@@ -333,6 +397,7 @@ export const AuthScreen: React.FC = () => {
                         <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                         <input
                           type="text"
+                          id="signup-company-input"
                           placeholder="Apex Holdings"
                           value={companyName}
                           onChange={(e) => setCompanyName(e.target.value)}
@@ -341,17 +406,34 @@ export const AuthScreen: React.FC = () => {
                       </div>
                     </div>
 
+                    {/* Mobile Number with Country Code Dropdown */}
                     <div>
                       <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                        Phone Number
+                        Mobile Number
                       </label>
-                      <input
-                        type="tel"
-                        placeholder="+1 (555) 000-0000"
-                        value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value)}
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-700 bg-slate-800/80 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
+                      <div className="flex rounded-xl border border-slate-700 bg-slate-800/80 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent overflow-hidden">
+                        <select
+                          id="signup-country-code-select"
+                          value={countryCode}
+                          onChange={(e) => setCountryCode(e.target.value)}
+                          className="pl-1 py-2 text-xs bg-slate-900/90 text-slate-200 border-r border-slate-700 focus:outline-none cursor-pointer"
+                          title="Select Country Dial Code"
+                        >
+                          {COUNTRY_CODES.map((c) => (
+                            <option key={c.code} value={c.code} className="bg-slate-900 text-white">
+                              {c.flag} {c.code}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="tel"
+                          id="signup-phone-input"
+                          placeholder="98765 43210"
+                          value={phoneNumber}
+                          onChange={(e) => setPhoneNumber(e.target.value.replace(/[^0-9\s-]/g, ''))}
+                          className="w-full px-3 py-2 text-xs bg-transparent text-white placeholder-slate-500 focus:outline-none"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -362,7 +444,7 @@ export const AuthScreen: React.FC = () => {
                 </>
               )}
 
-              {/* Email */}
+              {/* Email Input (All modes) */}
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">
                   Email Address *
@@ -372,6 +454,7 @@ export const AuthScreen: React.FC = () => {
                   <input
                     type="email"
                     required
+                    id="auth-email-input"
                     placeholder="name@company.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -380,7 +463,7 @@ export const AuthScreen: React.FC = () => {
                 </div>
               </div>
 
-              {/* Password */}
+              {/* Password (Sign In & Sign Up) */}
               {(mode === 'signin' || mode === 'signup') && (
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
@@ -390,6 +473,7 @@ export const AuthScreen: React.FC = () => {
                     {mode === 'signin' && (
                       <button
                         type="button"
+                        id="auth-forgot-password-btn"
                         onClick={() => handleModeSwitch('reset')}
                         className="text-xs text-indigo-400 hover:underline font-medium"
                       >
@@ -402,6 +486,7 @@ export const AuthScreen: React.FC = () => {
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
+                      id="auth-password-input"
                       placeholder="••••••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
@@ -411,6 +496,7 @@ export const AuthScreen: React.FC = () => {
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                      title={showPassword ? 'Hide password' : 'Show password'}
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -418,11 +504,54 @@ export const AuthScreen: React.FC = () => {
                 </div>
               )}
 
+              {/* Confirm Password (Sign Up Only) */}
+              {mode === 'signup' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Confirm Password *
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      required
+                      id="signup-confirm-password-input"
+                      placeholder="••••••••••••"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className={`w-full pl-9 pr-10 py-2 text-xs sm:text-sm rounded-xl border bg-slate-800/80 text-white placeholder-slate-500 focus:outline-none focus:ring-2 ${confirmPassword && password !== confirmPassword
+                        ? 'border-rose-600 focus:ring-rose-500'
+                        : confirmPassword && password === confirmPassword
+                          ? 'border-emerald-600 focus:ring-emerald-500'
+                          : 'border-slate-700 focus:ring-indigo-500'
+                        }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                      title={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {confirmPassword && password !== confirmPassword && (
+                    <p className="text-[11px] text-rose-400 mt-1">Passwords do not match</p>
+                  )}
+                  {confirmPassword && password === confirmPassword && (
+                    <p className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> Passwords match
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Submit Button */}
               <button
                 type="submit"
+                id="auth-submit-btn"
                 disabled={isLoading}
-                className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-98 text-white text-xs sm:text-sm font-bold shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition-all mt-2"
+                className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-98 text-white text-xs sm:text-sm font-bold shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 transition-all mt-2 disabled:opacity-60"
               >
                 {isLoading ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />
