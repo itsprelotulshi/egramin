@@ -37,6 +37,7 @@ export const Sidebar: React.FC = () => {
     requests,
     isMobileSidebarOpen,
     closeMobileSidebar,
+    themeConfig,
   } = useApp();
 
   const navItems: NavItemConfig[] = [
@@ -116,10 +117,10 @@ export const Sidebar: React.FC = () => {
             </div>
             <div className="min-w-0">
               <h1 className="font-bold text-white text-sm tracking-tight leading-none truncate">
-                E-Gramin Dashboard
+                {themeConfig?.brandName || 'E-Gramin Dashboard'}
               </h1>
               <p className="text-[11px] text-indigo-400/90 font-medium tracking-wide mt-1 truncate">
-                Client Management
+                {themeConfig?.brandTagline || 'Client Management'}
               </p>
             </div>
           </div>

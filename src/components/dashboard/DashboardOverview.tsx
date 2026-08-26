@@ -51,7 +51,7 @@ export const DashboardOverview: React.FC = () => {
   return (
     <div id="dashboard-overview-page" className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Top Banner / Welcome */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-emerald-950/80 to-slate-900 text-white p-6 rounded-2xl shadow-xl border border-emerald-900/40">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 text-white p-6 rounded-2xl shadow-xl border border-indigo-900/40 brand-glow">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase tracking-wider">

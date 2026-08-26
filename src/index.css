@@ -43,7 +43,8 @@
   --brand-primary: #059669;
   --brand-primary-rgb: 5, 150, 105;
   --app-border-radius: 0.75rem;
-  --brand-glow-opacity: 0.15;
+  --brand-glow-opacity: 0.18;
+  --app-font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 /* Surface tones in dark mode */
@@ -57,15 +58,31 @@ html.dark[data-surface="stone"] body {
 
 @layer base {
   body {
-    @apply antialiased text-slate-900 bg-slate-50 dark:bg-slate-950 dark:text-slate-100 min-h-screen font-sans transition-colors duration-200;
+    @apply antialiased text-slate-900 bg-slate-50 dark:bg-slate-950 dark:text-slate-100 min-h-screen transition-colors duration-200;
+    font-family: var(--app-font-family);
   }
+}
+
+/* High Contrast Mode Overrides */
+html.theme-high-contrast {
+  --brand-glow-opacity: 0;
+}
+html.theme-high-contrast .dark table,
+html.theme-high-contrast .dark div[class*="border-slate-800"],
+html.theme-high-contrast .dark div[class*="border-slate-700"] {
+  border-color: #334155 !important;
 }
 
 /* Density overrides */
 .density-compact table th,
 .density-compact table td {
-  padding-top: 0.5rem !important;
-  padding-bottom: 0.5rem !important;
+  padding-top: 0.45rem !important;
+  padding-bottom: 0.45rem !important;
+}
+
+/* Brand glow utility */
+.brand-glow {
+  box-shadow: 0 0 25px -5px rgba(var(--brand-primary-rgb), var(--brand-glow-opacity));
 }
 
 /* Custom subtle scrollbar */
