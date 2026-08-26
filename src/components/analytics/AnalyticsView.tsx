@@ -27,11 +27,13 @@ import {
   Zap
 } from 'lucide-react';
 
-const COLORS = ['#10b981', '#059669', '#14b8a6', '#f59e0b', '#ef4444'];
+import { THEME_PRESETS } from '../../lib/theme';
 
 export const AnalyticsView: React.FC = () => {
-  const { requests, triggerExportCSV } = useApp();
+  const { requests, triggerExportCSV, isDarkMode, themeConfig } = useApp();
   const { operators, allUsers } = useAuth();
+
+  const brandPrimary = THEME_PRESETS[themeConfig.preset]?.primaryHex || '#059669';
 
   // Metrics computation
   const total = requests.length;
@@ -46,9 +48,9 @@ export const AnalyticsView: React.FC = () => {
 
   // Chart 1: Volume by Type
   const typeData = [
-    { name: 'Support Tickets', count: supportCount, fill: '#059669' },
+    { name: 'Support Tickets', count: supportCount, fill: brandPrimary },
     { name: 'Deposit Updates', count: depositCount, fill: '#10b981' },
-    { name: 'Withdraw Requests', count: withdrawCount, fill: '#14b8a6' },
+    { name: 'Withdraw Requests', count: withdrawCount, fill: '#06b6d4' },
   ];
 
   // Chart 2: Status Breakdown

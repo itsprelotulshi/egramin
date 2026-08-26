@@ -30,6 +30,8 @@ import {
   RefreshCw,
   Globe,
   Home,
+  Menu,
+  Palette,
 } from 'lucide-react';
 import { NotificationDrawer } from '../notifications/NotificationDrawer';
 
@@ -51,6 +53,8 @@ export const Navbar: React.FC<NavbarProps> = () => {
     permissions,
     syncWithSupabase,
     isSupabaseConnected,
+    openThemeModal,
+    toggleMobileSidebar,
     toast,
   } = useApp();
 
@@ -115,8 +119,20 @@ export const Navbar: React.FC<NavbarProps> = () => {
         id="main-app-navbar"
         className="sticky top-0 z-30 h-16 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 px-4 lg:px-6 flex items-center justify-between transition-colors"
       >
-        {/* Left: Search input */}
-        <div className="flex items-center gap-4 flex-1 max-w-lg">
+        {/* Left: Mobile hamburger & Search input */}
+        <div className="flex items-center gap-2 sm:gap-4 flex-1 max-w-lg">
+          {/* Mobile Sidebar Trigger (only visible on mobile/tablet) */}
+          <button
+            type="button"
+            id="navbar-mobile-menu-btn"
+            onClick={toggleMobileSidebar}
+            className="lg:hidden p-2 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
+            title="Open navigation menu"
+            aria-label="Toggle navigation drawer"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
@@ -279,6 +295,25 @@ export const Navbar: React.FC<NavbarProps> = () => {
                         <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                           Executive Governance
                         </div>
+
+                        {/* Admin-only Theme Customizer Launcher */}
+                        <button
+                          id="profile-theme-customizer-btn"
+                          onClick={() => {
+                            setIsProfileDropdownOpen(false);
+                            openThemeModal();
+                          }}
+                          className="w-full flex items-center justify-between px-3 py-2 text-left text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50/70 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-xl transition-colors mb-1"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <Palette className="w-4 h-4 text-indigo-500" />
+                            <span>Theme & Branding</span>
+                          </div>
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider bg-indigo-200/70 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300">
+                            ADMIN
+                          </span>
+                        </button>
+
                         <button
                           onClick={() => {
                             setIsProfileDropdownOpen(false);

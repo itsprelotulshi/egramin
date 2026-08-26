@@ -41,6 +41,7 @@ import {
   saveAuditLogToSupabase,
   checkSupabaseHealth
 } from '../lib/supabase';
+import { ThemeConfig, getStoredTheme, applyTheme, DEFAULT_THEME } from '../lib/theme';
 import { useAuth } from './AuthContext';
 import confetti from 'canvas-confetti';
 
@@ -151,9 +152,23 @@ interface AppContextType {
   setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
   resetFilters: () => void;
 
-  // Theme
+  // Theme & Styling
   isDarkMode: boolean;
   toggleTheme: () => void;
+  themeConfig: ThemeConfig;
+  setThemeConfig: (config: ThemeConfig) => void;
+  updateThemeConfig: (updates: Partial<ThemeConfig>) => void;
+  resetThemeConfig: () => void;
+  isThemeModalOpen: boolean;
+  setIsThemeModalOpen: (open: boolean) => void;
+  openThemeModal: () => void;
+  closeThemeModal: () => void;
+
+  // Mobile Navigation
+  isMobileSidebarOpen: boolean;
+  setIsMobileSidebarOpen: (open: boolean) => void;
+  toggleMobileSidebar: () => void;
+  closeMobileSidebar: () => void;
 
   // Supabase Backend Status & Sync
   isSupabaseConnected: boolean;
@@ -347,6 +362,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (saved) return saved === 'dark';
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
+
+  // Dynamic Theme Config
+  const [themeConfig, setThemeConfigState] = useState<ThemeConfig>(() => getStoredTheme());
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    applyTheme(themeConfig);
+  }, [themeConfig]);
+
+  const setThemeConfig = useCallback((newConfig: ThemeConfig) => {
+    setThemeConfigState(newConfig);
+    applyTheme(newConfig);
+  }, []);
+
+  const updateThemeConfig = useCallback((updates: Partial<ThemeConfig>) => {
+    setThemeConfigState(prev => {
+      const next = { ...prev, ...updates };
+      applyTheme(next);
+      return next;
+    });
+  }, []);
+
+  const resetThemeConfig = useCallback(() => {
+    setThemeConfigState(DEFAULT_THEME);
+    applyTheme(DEFAULT_THEME);
+  }, []);
+
+  const openThemeModal = useCallback(() => setIsThemeModalOpen(true), []);
+  const closeThemeModal = useCallback(() => setIsThemeModalOpen(false), []);
+
+  const toggleMobileSidebar = useCallback(() => setIsMobileSidebarOpen(prev => !prev), []);
+  const closeMobileSidebar = useCallback(() => setIsMobileSidebarOpen(false), []);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -1478,6 +1526,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         resetFilters,
         isDarkMode,
         toggleTheme,
+        themeConfig,
+        setThemeConfig,
+        updateThemeConfig,
+        resetThemeConfig,
+        isThemeModalOpen,
+        setIsThemeModalOpen,
+        openThemeModal,
+        closeThemeModal,
+        isMobileSidebarOpen,
+        setIsMobileSidebarOpen,
+        toggleMobileSidebar,
+        closeMobileSidebar,
         isSupabaseConnected,
         syncWithSupabase,
         triggerExportCSV,

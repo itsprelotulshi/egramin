@@ -9,6 +9,7 @@ import { RequestDetailModal } from './components/requests/RequestDetailModal';
 import { AuthScreen } from './components/auth/AuthScreen';
 import { PendingApprovalScreen } from './components/auth/PendingApprovalScreen';
 import { EditProfileModal } from './components/profile/EditProfileModal';
+import { ThemeCustomizationModal } from './components/settings/ThemeCustomizationModal';
 import { HomePage } from './components/home/HomePage';
 import { InvalidSessionModal } from './components/auth/InvalidSessionModal';
 
@@ -101,6 +102,7 @@ const MainLayout: React.FC = () => {
       <CreateRequestModal />
       <RequestDetailModal />
       <EditProfileModal />
+      <ThemeCustomizationModal />
       <InvalidSessionModal />
       <Toast />
     </div>

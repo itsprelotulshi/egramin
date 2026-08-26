@@ -17,15 +17,17 @@ import {
   ExternalLink,
   Radio,
   Layers,
-  Sparkles
+  Sparkles,
+  Palette
 } from 'lucide-react';
 import { resetToDemoData } from '../../lib/storage';
 import { checkSupabaseHealth } from '../../lib/supabase';
 import { formatTimeIST } from '../../lib/dateUtils';
+import { THEME_PRESETS, SURFACE_TONES, RADIUS_VALUES } from '../../lib/theme';
 
 export const SettingsView: React.FC = () => {
   const { user, token, session, openAuthModal, openProfileModal } = useAuth();
-  const { requests, auditLogs, syncWithSupabase, toast } = useApp();
+  const { requests, auditLogs, syncWithSupabase, openThemeModal, themeConfig, toast } = useApp();
 
   const [isTestingDb, setIsTestingDb] = useState(false);
   const [healthResult, setHealthResult] = useState<{
@@ -234,6 +236,55 @@ export const SettingsView: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* Theme & Visual Identity Card (Admin Only) */}
+          {user?.role === 'admin' && (
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-indigo-500" />
+                  <span>Platform Theme & Styling</span>
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+                  {THEME_PRESETS[themeConfig.preset]?.name.split(' ')[0] || 'Custom'}
+                </span>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 text-xs space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Primary Accent:</span>
+                  <span className="font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                    <span
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: THEME_PRESETS[themeConfig.preset]?.primaryHex }}
+                    />
+                    {THEME_PRESETS[themeConfig.preset]?.name}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Dark Surface:</span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">
+                    {SURFACE_TONES[themeConfig.surfaceTone]?.name}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Corner Radius:</span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">
+                    {RADIUS_VALUES[themeConfig.radius]?.name}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                id="settings-theme-customizer-btn"
+                onClick={openThemeModal}
+                className="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all active:scale-98"
+              >
+                <Palette className="w-3.5 h-3.5" />
+                <span>Customize Visual Theme</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Right Column: Supabase Architecture & Database */}
