@@ -16,8 +16,8 @@ import {
   PageId,
 } from '../types';
 
-const supabaseUrl: string = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey: string = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const supabaseUrl: string | undefined = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey: string | undefined = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
