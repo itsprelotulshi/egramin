@@ -21,12 +21,6 @@ const supabaseAnonKey: string =
   import.meta.env.VITE_SUPABASE_ANON_KEY ||
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    '[CSMP] Missing Supabase credentials. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env.local file.'
-  );
-}
-
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     // ── Security: keep the JWT in memory only (not localStorage) ──────────
