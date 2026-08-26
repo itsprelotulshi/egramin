@@ -214,23 +214,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     // ── Step 2: Role + profile fields come from public.csmp_users (auth_user_id FK).
-    // If this row is missing, the user was deleted — force sign-out immediately.
-    const { data: dbRow, error: dbErr } = await supabase
+    let { data: dbRow, error: dbErr } = await supabase
       .from('csmp_users')
-      .select('id, role, status, avatar_url, company_name, phone_number, currency, account, ifsc, bank, estimated_holding_balance, created_at')
+      .select('id, auth_user_id, name, email, role, status, avatar_url, company_name, phone_number, currency, account, ifsc, bank, estimated_holding_balance, created_at')
       .eq('auth_user_id', authUsr.id)
       .maybeSingle();
 
-    if (!dbErr && dbRow === null) {
-      // No csmp_users row — user was deleted. Force sign-out regardless of JWT validity.
-      console.warn('matchUserToSession: no csmp_users row found — forcing sign-out.', authIdentity.email);
-      await supabase.auth.signOut();
-      setSession(null);
-      setSupabaseUser(null);
-      setIsAuthenticated(false);
-      setUserState(null);
-      setToken('');
-      return;
+    // If not found by auth_user_id, try finding by email
+    if (!dbRow && authIdentity.email) {
+      const { data: emailRow } = await supabase
+        .from('csmp_users')
+        .select('id, auth_user_id, name, email, role, status, avatar_url, company_name, phone_number, currency, account, ifsc, bank, estimated_holding_balance, created_at')
+        .eq('email', authIdentity.email.trim())
+        .maybeSingle();
+
+      if (emailRow) {
+        dbRow = emailRow;
+        // Link auth_user_id in csmp_users
+        await supabase
+          .from('csmp_users')
+          .update({ auth_user_id: authUsr.id })
+          .eq('id', emailRow.id);
+      }
+    }
+
+    // If still not found in csmp_users, auto-provision user profile (e.g. for new signups)
+    if (!dbRow && authUsr) {
+      const defaultRole = (meta.role as UserRole) || 'client';
+      const defaultStatus = (meta.status as any) || 'pending';
+      const newUserId = `usr_${authUsr.id.substring(0, 8)}`;
+      const newUser: User = {
+        id: newUserId,
+        authUserId: authUsr.id,
+        name: authIdentity.name,
+        email: authIdentity.email,
+        role: defaultRole,
+        companyName: meta.company_name || meta.companyName,
+        phoneNumber: meta.phone_number || meta.phoneNumber,
+        status: defaultStatus,
+        currency: meta.currency || 'INR',
+        avatarUrl: meta.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${authIdentity.email}`,
+        createdAt: new Date().toISOString(),
+      };
+
+      try {
+        await supabase.from('csmp_users').upsert(mapUserToDb(newUser), { onConflict: 'email' });
+        await syncUsers();
+        setUserState(newUser);
+        return;
+      } catch (err) {
+        console.warn('Could not auto-provision csmp_users row:', err);
+      }
     }
 
     if (dbRow) {
@@ -241,6 +275,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         name: authIdentity.name,
         // App ID: from csmp_users row
         id: dbRow.id,
+        authUserId: authUsr.id,
         // Role + status: exclusively from csmp_users (never from JWT claims)
         role: dbRow.role as UserRole,
         status: dbRow.status || 'pending',
@@ -381,6 +416,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data.user) {
+        const newUser: User = {
+          id: `usr_${data.user.id.substring(0, 8)}`,
+          authUserId: data.user.id,
+          name: metadata.name,
+          email: email.trim(),
+          role: defaultRole,
+          companyName: metadata.companyName,
+          phoneNumber: metadata.phoneNumber,
+          status: 'pending',
+          currency: 'INR',
+          avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email.trim()}`,
+          createdAt: new Date().toISOString(),
+        };
+
+        try {
+          await supabase.from('csmp_users').upsert(mapUserToDb(newUser), { onConflict: 'email' });
+          await syncUsers();
+        } catch (dbErr) {
+          console.warn('Could not insert csmp_users row directly:', dbErr);
+        }
+
         if (data.session) {
           setSession(data.session);
           setSupabaseUser(data.user);

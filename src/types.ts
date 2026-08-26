@@ -15,6 +15,7 @@ export type PageId =
 
 export interface User {
   id: string;
+  authUserId?: string;
   name: string;
   email: string;
   role: UserRole;

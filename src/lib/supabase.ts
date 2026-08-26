@@ -121,6 +121,7 @@ export const supabase: SupabaseClient = isSupabaseConfigured
 export function mapDbUser(row: any): User {
   return {
     id: row.id,
+    authUserId: row.auth_user_id || undefined,
     name: row.name,
     email: row.email,
     role: row.role as UserRole,
@@ -140,6 +141,7 @@ export function mapDbUser(row: any): User {
 export function mapUserToDb(u: User): any {
   return {
     id: u.id,
+    auth_user_id: u.authUserId || null,
     name: u.name,
     email: u.email,
     role: u.role,
@@ -154,6 +156,12 @@ export function mapUserToDb(u: User): any {
     status: u.status,
     created_at: u.createdAt,
   };
+}
+
+export async function saveUserToSupabase(user: User): Promise<void> {
+  const payload = mapUserToDb(user);
+  const { error } = await supabase.from('csmp_users').upsert(payload, { onConflict: 'email' });
+  if (error) throw error;
 }
 
 export function mapDbRequest(row: any): ServiceRequest {
