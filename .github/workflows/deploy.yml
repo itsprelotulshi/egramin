@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - master
+      - uat
   workflow_dispatch:
 
 permissions:
