@@ -16,8 +16,27 @@ import {
   PageId,
 } from '../types';
 
-const supabaseUrl: string | undefined = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey: string | undefined = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const rawSupabaseAnonKey =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+export const isSupabaseConfigured: boolean = Boolean(
+  rawSupabaseUrl &&
+  rawSupabaseAnonKey &&
+  rawSupabaseUrl.startsWith('http') &&
+  !rawSupabaseUrl.includes('placeholder') &&
+  !rawSupabaseAnonKey.includes('your-supabase-anon-key')
+);
+
+// Safe fallback URL and key so createClient() never throws at module load time
+const supabaseUrl: string = isSupabaseConfigured && rawSupabaseUrl
+  ? rawSupabaseUrl
+  : 'https://placeholder.supabase.co';
+
+const supabaseAnonKey: string = isSupabaseConfigured && rawSupabaseAnonKey
+  ? rawSupabaseAnonKey
+  : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder-anon-key';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -28,8 +47,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     // persistence). autoRefreshToken still silently renews the JWT while the
     // tab is open. detectSessionInUrl handles magic-link / OAuth redirects.
     persistSession: false,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
+    autoRefreshToken: isSupabaseConfigured,
+    detectSessionInUrl: isSupabaseConfigured,
   },
 });
 
@@ -438,6 +457,13 @@ export async function checkSupabaseHealth(): Promise<{
   error?: string;
   tables?: { users: number; requests: number; auditLogs: number };
 }> {
+  if (!isSupabaseConfigured) {
+    return {
+      connected: false,
+      latencyMs: 0,
+      error: 'Supabase credentials are not configured or using placeholder values.',
+    };
+  }
   const start = performance.now();
   try {
     const [usersRes, reqsRes, auditRes] = await Promise.all([
