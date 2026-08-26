@@ -50,22 +50,26 @@ async function runMigration() {
     console.log(`  - Audit Logs: ${resAudit.rows[0].count}`);
     console.log(`  - Notifications: ${resNotifs.rows[0].count}`);
   } catch (err: any) {
+    console.error('\n❌ Migration failed:', err.message || err);
+
     if (err.code === 'ECONNREFUSED' && isLocal) {
-      console.error('\n Migration Error: Local PostgreSQL is not running on 127.0.0.1:54322.');
-      console.log('\n How to proceed:');
-      console.log('  Option 1 (Fastest for Supabase Cloud - Recommended):');
-      console.log('    1. Open your Supabase Cloud Dashboard (https://supabase.com/dashboard)');
-      console.log('    2. Go to the "SQL Editor" tab.');
-      console.log('    3. Paste the contents of "supabase/schema.sql" and click "Run".\n');
-      console.log('  Option 2 (Via CLI):');
-      console.log('    1. In your Supabase Dashboard, go to Project Settings > Database.');
-      console.log('    2. Copy the "URI" connection string (under Connection Pooling, Port 6543 or 5432).');
-      console.log('    3. In your .env.local file, set:');
-      console.log('       DATABASE_URL="postgresql://postgres.[project-ref]:[YOUR-PASSWORD]@aws-0-[region].pooler.supabase.com:6543/postgres"');
-      console.log('    4. Run "npm run db:migrate" again.\n');
-    } else {
-      console.error('\n Migration failed:', err.message || err);
+      console.error('\n⚠️ Local PostgreSQL is not running on 127.0.0.1:54322.');
+    } else if (err.code === 'ETIMEDOUT' || err.message?.includes('ETIMEDOUT')) {
+      console.log('\n💡 Connection Timed Out (IPv6 / Network Issue):');
+      console.log('   Supabase direct database URLs (db.xxx.supabase.co) use IPv6, which is often not supported by local ISPs/networks.');
     }
+
+    console.log('\n🛠️ How to resolve:');
+    console.log('  Option 1 (Fastest & 100% Reliable - Recommended):');
+    console.log('    1. Open your Supabase Dashboard (https://supabase.com/dashboard)');
+    console.log('    2. Go to "SQL Editor" tab.');
+    console.log('    3. Paste the contents of "supabase/schema.sql" and click "Run".\n');
+    console.log('  Option 2 (Use Supabase Connection Pooler with IPv4):');
+    console.log('    1. In Supabase Dashboard, go to Project Settings > Database.');
+    console.log('    2. Under "Connection string", select "Connection pooler" (Session mode).');
+    console.log('    3. Copy the URI string (e.g. postgresql://postgres.[ref]:[pass]@aws-0-[region].pooler.supabase.com:6543/postgres or port 5432).');
+    console.log('    4. Update DATABASE_URL in your .env.local file.');
+    console.log('    5. Re-run "npm run db:migrate".\n');
     process.exit(1);
   } finally {
     await client.end().catch(() => {});
