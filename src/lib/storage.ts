@@ -15,9 +15,9 @@ import { formatDateTimeIST } from './dateUtils';
 // (name, email, phone, bank details) is PII and must NOT be persisted to
 // localStorage. It lives exclusively in React state, populated from the
 // Supabase session on every page load.
-const USERS_KEY        = 'csmp_users_v1';        // Non-PII user cache (role, status, id only)
-const REQUESTS_KEY     = 'csmp_requests_v1';
-const PERMISSIONS_KEY  = 'csmp_permissions_v1';
+const USERS_KEY = 'csmp_users_v1';        // Non-PII user cache (role, status, id only)
+const REQUESTS_KEY = 'csmp_requests_v1';
+const PERMISSIONS_KEY = 'csmp_permissions_v1';
 const NOTIFICATIONS_KEY = 'csmp_notifications_v1';
 
 // Audit logs are NOT stored in localStorage — they are fetched exclusively
@@ -73,7 +73,7 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, RolePermissions> = {
   },
   client: {
     role: 'client',
-    allowedPages: ['dashboard', 'support', 'holding', 'notifications'],
+    allowedPages: ['dashboard', 'support', 'holding'],
     canCreateRequest: true,
     canChangeStatus: false,
     canAssignOperator: false,

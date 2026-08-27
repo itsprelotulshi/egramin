@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth, AuthModalMode } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
-import { UserRole } from '../../types';
 import { isValidEmail, isValidPhoneNumber, formatFullPhoneNumber, COUNTRY_CODES } from '../../lib/validators';
 import {
   Sparkles,
@@ -45,7 +44,8 @@ export const AuthScreen: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [name, setName] = useState('');
-  const [role, setRole] = useState<UserRole>('client');
+  // Security: role is not user-selectable — all self-signups are always 'client'.
+  // Role promotion is a privileged admin action only.
   const [companyName, setCompanyName] = useState('');
   const [countryCode, setCountryCode] = useState('+91');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -121,8 +121,8 @@ export const AuthScreen: React.FC = () => {
           return;
         }
 
-        if (password.length < 6) {
-          setErrorMsg('Password must be at least 6 characters long.');
+        if (password.length < 8) {
+          setErrorMsg('Password must be at least 8 characters long.');
           setIsLoading(false);
           return;
         }
@@ -151,7 +151,7 @@ export const AuthScreen: React.FC = () => {
 
         const res = await signUpWithPassword(trimmedEmail, password, {
           name: name.trim(),
-          role,
+          // role omitted — server always assigns 'client' for new signups
           companyName: companyName.trim() || undefined,
           phoneNumber: fullPhone,
         });

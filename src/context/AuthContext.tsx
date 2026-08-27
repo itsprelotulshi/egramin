@@ -60,24 +60,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Generate a fallback mock JWT token if offline or using local persona
-function generateMockJWT(user: User | null): string {
-  if (!user) return '';
-  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const payload = btoa(
-    JSON.stringify({
-      sub: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
-      iat: Math.floor(Date.now() / 1000),
-      iss: 'https://servicecore.internal.auth',
-    })
-  );
-  const signature = btoa(`sig_${user.id}_${Date.now()}`);
-  return `${header}.${payload}.${signature}`;
-}
+// Security: generateMockJWT removed — token is exclusively sourced from
+// the live Supabase session (session.access_token). A forgeable client-side
+// token must never be used in any authorization context.
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [allUsers, setAllUsers] = useState<User[]>(getStoredUsers);
@@ -240,8 +225,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // If still not found in csmp_users, auto-provision user profile (e.g. for new signups)
     if (!dbRow && authUsr) {
-      const defaultRole = (meta.role as UserRole) || 'client';
-      const defaultStatus = (meta.status as any) || 'pending';
+      // Security: always provision as 'client' + 'pending' regardless of any
+      // role value in user_metadata — role promotion is admin-only.
+      const defaultRole: UserRole = 'client';
+      const defaultStatus = 'pending';
       const newUserId = `usr_${authUsr.id.substring(0, 8)}`;
       const newUser: User = {
         id: newUserId,
@@ -394,14 +381,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   ) => {
     try {
-      const defaultRole: UserRole = metadata.role || 'client';
+      // Security: always assign 'client' role for self-signups regardless
+      // of any metadata.role value supplied by the caller — role promotion
+      // is a privileged admin action performed after account approval.
+      const defaultRole: UserRole = 'client';
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
           data: {
             name: metadata.name,
-            role: defaultRole,
+            role: defaultRole, // always 'client' — never trust caller-supplied role
             company_name: metadata.companyName,
             phone_number: metadata.phoneNumber,
             holding_account_id: metadata.holdingAccountId,

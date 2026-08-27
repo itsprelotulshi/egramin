@@ -111,7 +111,6 @@ export const Navbar: React.FC<NavbarProps> = () => {
   };
 
   const userRole = user?.role || 'client';
-  const canCreate = userRole === 'client' && (permissions[userRole]?.canCreateRequest ?? true);
 
   return (
     <>
