@@ -25,6 +25,8 @@ import {
   resetToDemoData,
   exportRequestsToCSV,
   DEFAULT_PERMISSIONS,
+  getStoredPermissions,
+  clearSensitiveStorage,
 } from '../lib/storage';
 import {
   supabase,
@@ -291,8 +293,14 @@ function syncRouteToUrl(view: AppView, page: PageId) {
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, allUsers, isAuthenticated, session } = useAuth();
 
+  // One-time eviction: purge all sensitive legacy caches from localStorage.
+  React.useEffect(() => {
+    clearSensitiveStorage();
+  }, []);
+
   const [currentView, setCurrentViewState] = useState<AppView>(() => getRouteFromHashOrStorage().view);
   const [currentPage, setCurrentPageState] = useState<PageId>(() => getRouteFromHashOrStorage().page);
+
 
   const setCurrentView = useCallback((view: AppView) => {
     setCurrentViewState(view);
@@ -345,8 +353,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // All sensitive state starts empty — populated by syncWithSupabase after auth succeeds.
   // Do NOT initialize from localStorage on cold start: unauthenticated visits must see nothing.
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
-  // Permissions start from built-in defaults; DB-synced values loaded post-auth.
-  const [permissions, setPermissions] = useState<Record<UserRole, RolePermissions>>(DEFAULT_PERMISSIONS);
+  // Permissions start from built-in defaults or local storage
+  const [permissions, setPermissions] = useState<Record<UserRole, RolePermissions>>(() => getStoredPermissions());
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [isSupabaseConnected, setIsSupabaseConnected] = useState<boolean>(false);
@@ -424,9 +432,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsSupabaseConnected(health.connected);
 
       if (health.connected) {
-        const [dbReqs, dbPerms, dbNotifs, dbAudit] = await Promise.all([
+        const [dbReqs, dbNotifs, dbAudit] = await Promise.all([
           fetchRequestsFromSupabase().catch(() => null),
-          fetchPermissionsFromSupabase().catch(() => null),
           fetchNotificationsFromSupabase().catch(() => null),
           fetchAuditLogsFromSupabase().catch(() => null),
         ]);
@@ -434,23 +441,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (dbReqs && dbReqs.length > 0) {
           setRequests(dbReqs);
           saveRequests(dbReqs);
-        }
-        if (dbPerms) {
-          // Merge with DEFAULT_PERMISSIONS so any newly introduced pages
-          // (e.g. 'notifications') are present even in stale DB permission rows.
-          const merged: Record<string, any> = { ...dbPerms };
-          (Object.keys(DEFAULT_PERMISSIONS) as UserRole[]).forEach(role => {
-            if (merged[role]) {
-              const dbAllowed: PageId[] = merged[role].allowedPages ?? [];
-              const defaultAllowed: PageId[] = DEFAULT_PERMISSIONS[role].allowedPages;
-              merged[role] = {
-                ...merged[role],
-                allowedPages: Array.from(new Set([...dbAllowed, ...defaultAllowed.filter(p => DEFAULT_PERMISSIONS[role].allowedPages.includes(p))])),
-              };
-            }
-          });
-          setPermissions(merged as Record<UserRole, RolePermissions>);
-          savePermissions(merged as Record<UserRole, RolePermissions>);
         }
         if (dbNotifs && dbNotifs.length > 0) {
           setNotifications(dbNotifs);
@@ -506,6 +496,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               saveRequests(dbReqs);
             }
           }).catch(() => { });
+        } else if (event.data?.type === 'RBAC_UPDATED' && event.data?.payload) {
+          // Another tab updated RBAC — merge the changed role permissions into state
+          const updatedRole = event.data.payload as { role: UserRole; perms: RolePermissions };
+          setPermissions(prev => {
+            const next = { ...prev, [updatedRole.role]: updatedRole.perms };
+            savePermissions(next);
+            return next;
+          });
         }
       };
     }
@@ -635,15 +633,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [requests]);
 
-  // Allowed pages computation
-  // Merge stored/Supabase permissions with DEFAULT_PERMISSIONS so any newly
-  // introduced pages (e.g. 'notifications') are always present, even for
-  // permissions rows that were saved before that page existed.
+  // Allowed pages — sourced from permissions with resilient hardcoded fallback
   const userRole = user?.role || 'client';
-  const rolePerm = permissions[userRole] || permissions.client;
-  const defaultAllowed = DEFAULT_PERMISSIONS[userRole]?.allowedPages ?? [];
-  const storedAllowed = rolePerm?.allowedPages ?? [];
-  const allowedPages: PageId[] = Array.from(new Set([...storedAllowed, ...defaultAllowed.filter(p => DEFAULT_PERMISSIONS[userRole]?.allowedPages.includes(p))]));
+  const rolePerm = permissions[userRole] || DEFAULT_PERMISSIONS[userRole] || DEFAULT_PERMISSIONS.client;
+  const allowedPages: PageId[] = (rolePerm?.allowedPages && rolePerm.allowedPages.length > 0)
+    ? rolePerm.allowedPages
+    : (DEFAULT_PERMISSIONS[userRole]?.allowedPages || DEFAULT_PERMISSIONS.client.allowedPages);
   const isPageAllowed = (page: PageId) => allowedPages.includes(page);
 
   // Redirect if current page not allowed for authenticated user
@@ -1549,20 +1544,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // RBAC Matrix Updates
-  const updateRolePermission = (role: UserRole, updates: Partial<RolePermissions>) => {
+  const updateRolePermission = async (role: UserRole, updates: Partial<RolePermissions>) => {
     const updatedRolePerm = { ...permissions[role], ...updates };
     const updated = {
       ...permissions,
       [role]: updatedRolePerm,
     };
+
+    // 1. Apply optimistic local update immediately so the UI reflects the change
     setPermissions(updated);
     savePermissions(updated);
 
-    // Save to Supabase
-    savePermissionsToSupabase(role, updatedRolePerm).catch(() => { });
+    // 2. Persist to Supabase csmp_role_permissions table
+    try {
+      await savePermissionsToSupabase(role, updatedRolePerm);
+      toast(`Permissions for ${role.toUpperCase()} saved to database.`, 'success');
+    } catch (err: any) {
+      console.warn('[RBAC] Supabase database sync warning:', err?.message || err);
+      const isRls = err?.code === '42501' || err?.message?.includes('violates row-level security');
+      if (isRls) {
+        toast(`Supabase RLS: Run the policy SQL in Supabase SQL Editor to allow database writes.`, 'warning');
+      } else {
+        toast(`Database write notice: ${err?.message || 'Offline mode active'}`, 'warning');
+      }
+    }
+
+    // 3. Broadcast to other tabs on the same device via BroadcastChannel
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        const bc = new BroadcastChannel('csmp_live_sync');
+        bc.postMessage({ type: 'RBAC_UPDATED', payload: { role, perms: updatedRolePerm } });
+        bc.close();
+      } catch { /* not supported */ }
+    }
 
     recordAudit('MODIFIED_RBAC_PERMISSIONS', 'rbac', role, `Updated capabilities for role [${role.toUpperCase()}]`);
-    toast(`Permissions updated for role ${role.toUpperCase()}`, 'success');
   };
 
   const togglePageForRole = (role: UserRole, pageId: PageId) => {

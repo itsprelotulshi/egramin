@@ -1,23 +1,42 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
-import { UserRole, PageId, RolePermissions } from '../../types';
+import { UserRole, PageId, RolePermissions, APP_PAGE_DEFINITIONS, getPageMetadata } from '../../types';
 import { RoleBadge } from '../common/Badge';
 import {
   ShieldCheck,
   Check,
   X,
-  Lock,
-  RotateCcw,
-  Sliders,
-  AlertCircle,
-  HelpCircle,
-  ShieldAlert
+  ShieldAlert,
+  Database,
+  Radio,
+  Sparkles
 } from 'lucide-react';
 
 export const RolePermissionMatrix: React.FC = () => {
-  const { permissions, updateRolePermission, togglePageForRole, toast } = useApp();
+  const { permissions, updateRolePermission, togglePageForRole, isSupabaseConnected } = useApp();
   const { user } = useAuth();
+
+  // Dynamic roles discovered from permissions state (linked directly to csmp_role_permissions)
+  const roles: UserRole[] = useMemo(() => {
+    const keys = Object.keys(permissions) as UserRole[];
+    const standardRoles: UserRole[] = ['client', 'operator', 'admin'];
+    return Array.from(new Set([...standardRoles, ...keys]));
+  }, [permissions]);
+
+  // Dynamically resolve all pages from the system catalogue AND any custom entries in allowed_pages
+  const dynamicPages = useMemo(() => {
+    const pageIdSet = new Set<string>(APP_PAGE_DEFINITIONS.map(p => p.id));
+
+    // Include any page ID currently stored in csmp_role_permissions.allowed_pages
+    Object.values(permissions).forEach(rolePerm => {
+      if (Array.isArray(rolePerm?.allowedPages)) {
+        rolePerm.allowedPages.forEach(p => pageIdSet.add(p));
+      }
+    });
+
+    return Array.from(pageIdSet).map(id => getPageMetadata(id));
+  }, [permissions]);
 
   if (user.role !== 'admin') {
     return (
@@ -32,21 +51,6 @@ export const RolePermissionMatrix: React.FC = () => {
       </div>
     );
   }
-
-  const pages: { id: PageId; name: string; desc: string }[] = [
-    { id: 'dashboard', name: 'Dashboard Overview', desc: 'KPI metrics, summary cards, and launchpad shortcuts' },
-    { id: 'support', name: 'Technical Support Desk', desc: 'Category-filtered tickets, bug reports, and screenshot reviews' },
-    { id: 'holding', name: 'Holding Update Requests', desc: 'Deposit confirmation slips and withdrawal payout requests' },
-    { id: 'all-requests', name: 'All Service Requests', desc: 'Master directory table with multi-parameter filtering and search' },
-    { id: 'clients', name: 'Client Directory (CRM)', desc: 'Client account list, holding balances, and portfolio histories' },
-    { id: 'analytics', name: 'Analytics & SLA Reporting', desc: 'Recharts visualizations, operator workload, and volume trends' },
-    { id: 'rbac', name: 'Role & RBAC Matrix', desc: 'Security access control matrix and page assignment engine' },
-    { id: 'audit-logs', name: 'Audit Trail & Logs', desc: 'Immutable activity log capturing status transitions and logins' },
-    { id: 'notifications', name: 'Notification Logs Center', desc: 'Real-time alert dispatch log, queue triggers, and client notifications' },
-    { id: 'settings', name: 'Settings & Supabase Config', desc: 'Account credentials, simulated Supabase DB link, and JWT inspect' },
-  ];
-
-  const roles: UserRole[] = ['client', 'operator', 'admin'];
 
   const capabilities: { key: keyof RolePermissions; label: string; desc: string }[] = [
     { key: 'canCreateRequest', label: 'Create New Requests', desc: 'Allows submitting new technical support or holding update tickets' },
@@ -72,19 +76,31 @@ export const RolePermissionMatrix: React.FC = () => {
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Configure dynamic page permissions and functional privileges per role in real time.
+            Dynamic view routing and capability privileges linked directly to the <span className="font-mono text-purple-600 dark:text-purple-400 font-semibold">csmp_role_permissions</span> database table.
           </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-2 ${
+            isSupabaseConnected
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800'
+              : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800'
+          }`}>
+            <Database className="w-3.5 h-3.5" />
+            <span>{isSupabaseConnected ? 'csmp_role_permissions synced' : 'Local Storage Cache'}</span>
+          </div>
         </div>
       </div>
 
       {/* Section 1: Page Navigation Matrix */}
       <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
         <div>
-          <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
-            Page & View Access Permissions
+          <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <span>Page & View Access Permissions</span>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500">allowed_pages (jsonb)</span>
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Select which sidebar navigation views are enabled for each role.
+            Dynamically loaded views stored in the <code className="text-purple-600 dark:text-purple-400">allowed_pages</code> column per role.
           </p>
         </div>
 
@@ -103,14 +119,14 @@ export const RolePermissionMatrix: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
-              {pages.map((p) => (
+              {dynamicPages.map((p) => (
                 <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                   <td className="py-3 px-4">
                     <div className="font-semibold text-slate-900 dark:text-slate-100">{p.name}</div>
                     <div className="text-[11px] text-slate-400">{p.desc}</div>
                   </td>
                   {roles.map(r => {
-                    const isAllowed = permissions[r].allowedPages.includes(p.id);
+                    const isAllowed = permissions[r]?.allowedPages?.includes(p.id) ?? false;
                     const isAdminLocked = r === 'admin' && (p.id === 'dashboard' || p.id === 'rbac');
 
                     return (
@@ -170,7 +186,7 @@ export const RolePermissionMatrix: React.FC = () => {
                     <div className="text-[11px] text-slate-400">{cap.desc}</div>
                   </td>
                   {roles.map(r => {
-                    const isAllowed = Boolean(permissions[r][cap.key]);
+                    const isAllowed = Boolean(permissions[r]?.[cap.key]);
                     const isAdminLocked = r === 'admin';
 
                     return (

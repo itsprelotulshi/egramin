@@ -65,7 +65,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // token must never be used in any authorization context.
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [allUsers, setAllUsers] = useState<User[]>(getStoredUsers);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
 
   // Auth state is NOT seeded from localStorage — it is populated entirely from
   // Supabase's in-memory onAuthStateChange (INITIAL_SESSION event on mount).

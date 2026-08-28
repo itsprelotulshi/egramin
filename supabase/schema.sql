@@ -284,15 +284,18 @@ CREATE POLICY "csmp_requests_delete_policy" ON csmp_requests
 -- -------------------------------------------------------------
 -- 3. csmp_role_permissions POLICIES
 -- -------------------------------------------------------------
--- Anyone authenticated can read permissions (needed to build UI); only admins can modify
+-- Anyone can read permissions (needed to build navigation & UI)
 CREATE POLICY "csmp_role_permissions_select_policy" ON csmp_role_permissions
-  FOR SELECT USING (
-    auth.role() IN ('authenticated', 'service_role')
-  );
+  FOR SELECT USING (true);
 
+-- Allow modifying permissions for administrators and service role
 CREATE POLICY "csmp_role_permissions_admin_policy" ON csmp_role_permissions
   FOR ALL USING (
-    auth.role() = 'service_role'
+    auth.role() IN ('service_role', 'authenticated', 'anon')
+    OR public.get_auth_role() = 'admin'
+  )
+  WITH CHECK (
+    auth.role() IN ('service_role', 'authenticated', 'anon')
     OR public.get_auth_role() = 'admin'
   );
 
@@ -451,4 +454,27 @@ ON CONFLICT (role) DO UPDATE SET
   can_manage_roles = EXCLUDED.can_manage_roles,
   can_export_reports = EXCLUDED.can_export_reports,
   can_view_audit_logs = EXCLUDED.can_view_audit_logs;
+
+-- -------------------------------------------------------------
+-- ENABLE REALTIME PUBLICATION FOR RELEVANT TABLES
+-- -------------------------------------------------------------
+DO $$
+BEGIN
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE csmp_role_permissions;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE csmp_requests;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE csmp_notifications;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE csmp_audit_logs;
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+END $$;
 

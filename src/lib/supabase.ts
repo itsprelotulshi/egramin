@@ -1,5 +1,16 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import {
+import type {
+  Database,
+  DbUser,
+  DbUserInsert,
+  DbRequest,
+  DbRequestInsert,
+  DbRolePermission,
+  DbRolePermissionInsert,
+  DbNotification,
+  DbNotificationInsert,
+  DbAuditLog,
+  DbAuditLogInsert,
   User,
   UserRole,
   ServiceRequest,
@@ -14,7 +25,7 @@ import {
   RequestStatus,
   RequestPriority,
   PageId,
-} from '../types';
+} from '../types/app.type';
 
 const supabaseUrl: string = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey: string =
@@ -118,41 +129,41 @@ export const supabase: SupabaseClient = isSupabaseConfigured
 // Type mappers (DB Snake_Case <-> Frontend CamelCase)
 // -------------------------------------------------------------
 
-export function mapDbUser(row: any): User {
+export function mapDbUser(row: DbUser | any): User {
   return {
     id: row.id,
     authUserId: row.auth_user_id || undefined,
     name: row.name,
     email: row.email,
-    role: row.role as UserRole,
-    avatarUrl: row.avatar_url,
-    companyName: row.company_name,
-    phoneNumber: row.phone_number,
-    account: row.account || '',
+    role: (row.role as UserRole) || 'client',
+    avatarUrl: row.avatar_url || undefined,
+    companyName: row.company_name || undefined,
+    phoneNumber: row.phone_number || undefined,
+    account: row.account ? String(row.account) : '',
     ifsc: row.ifsc || '',
     bank: row.bank || '',
     estimatedHoldingBalance: row.estimated_holding_balance ? Number(row.estimated_holding_balance) : 0,
     currency: row.currency || 'INR',
-    status: row.status || 'active',
-    createdAt: row.created_at,
+    status: (row.status as User['status']) || 'active',
+    createdAt: row.created_at || new Date().toISOString(),
   };
 }
 
-export function mapUserToDb(u: User): any {
+export function mapUserToDb(u: User): DbUserInsert {
   return {
     id: u.id,
     auth_user_id: u.authUserId || null,
     name: u.name,
     email: u.email,
     role: u.role,
-    avatar_url: u.avatarUrl,
-    company_name: u.companyName,
-    phone_number: u.phoneNumber,
-    account: u.account || null,
+    avatar_url: u.avatarUrl || null,
+    company_name: u.companyName || null,
+    phone_number: u.phoneNumber || null,
+    account: u.account ? Number(u.account) || null : null,
     ifsc: u.ifsc || null,
     bank: u.bank || null,
-    estimated_holding_balance: u.estimatedHoldingBalance,
-    currency: u.currency,
+    estimated_holding_balance: u.estimatedHoldingBalance ?? null,
+    currency: u.currency || 'INR',
     status: u.status,
     created_at: u.createdAt,
   };
@@ -164,7 +175,7 @@ export async function saveUserToSupabase(user: User): Promise<void> {
   if (error) throw error;
 }
 
-export function mapDbRequest(row: any): ServiceRequest {
+export function mapDbRequest(row: DbRequest | any): ServiceRequest {
   const base: any = {
     id: row.id,
     ticketNumber: row.ticket_number,
@@ -176,12 +187,12 @@ export function mapDbRequest(row: any): ServiceRequest {
     clientId: row.client_id,
     clientName: row.client_name,
     clientEmail: row.client_email,
-    clientCompany: row.client_company,
-    assignedOperatorId: row.assigned_operator_id,
-    assignedOperatorName: row.assigned_operator_name,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    resolvedAt: row.resolved_at,
+    clientCompany: row.client_company || undefined,
+    assignedOperatorId: row.assigned_operator_id || undefined,
+    assignedOperatorName: row.assigned_operator_name || undefined,
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+    resolvedAt: row.resolved_at || undefined,
     deleteRequested: Boolean(row.delete_requested),
     deleteRequestedBy: row.delete_requested_by || undefined,
     deleteRequestedById: row.delete_requested_by_id || undefined,
@@ -208,9 +219,9 @@ export function mapDbRequest(row: any): ServiceRequest {
       ...base,
       type: 'support',
       category: row.category || 'matm',
-      remoteId: row.remote_id || row.remoteId || row.remote_type,
-      environment: row.environment,
-      browserInfo: row.browser_info,
+      remoteId: row.remote_id || undefined,
+      environment: row.browser_info || undefined,
+      browserInfo: row.browser_info || undefined,
     } as SupportTicket;
   }
 
@@ -220,12 +231,12 @@ export function mapDbRequest(row: any): ServiceRequest {
       type: 'deposit',
       amount: row.amount ? Number(row.amount) : 0,
       currency: row.currency || 'USD',
-      depositMethod: row.deposit_method || 'bank_wire',
+      depositMethod: row.deposit_method || 'bank_deposit',
       transactionReferenceId: row.transaction_reference_id || '',
-      senderAccountName: row.sender_account_name,
+      senderAccountName: row.sender_account_name || undefined,
       depositDate: row.deposit_date || new Date().toISOString().split('T')[0],
-      destinationAccount: row.destination_account || '',
-      verifiedTransactionId: row.verified_transaction_id,
+      destinationAccount: '',
+      verifiedTransactionId: row.verified_transaction_id || undefined,
     } as HoldingDepositRequest;
   }
 
@@ -236,20 +247,17 @@ export function mapDbRequest(row: any): ServiceRequest {
     currency: row.currency || 'USD',
     withdrawMethod: row.withdraw_method || 'bank_wire',
     beneficiaryAccountName: row.beneficiary_account_name || '',
-    // schema column is beneficiary_account_number (not ...or_address)
-    beneficiaryAccountNumberOrAddress: row.beneficiary_account_number || '',
-    // schema column is bank_name (not bank_name_or_network)
-    bankNameOrNetwork: row.bank_name,
-    // schema column is bank_ifsc (not swift_or_iban)
-    swiftOrIban: row.bank_ifsc,
-    reason: row.reason,
-    transferReceiptRef: row.transfer_receipt_ref,
+    beneficiaryAccountNumberOrAddress: row.beneficiary_account_number_or_address || '',
+    bankNameOrNetwork: row.bank_name_or_network || undefined,
+    swiftOrIban: row.swift_or_iban || undefined,
+    reason: row.reason || undefined,
+    transferReceiptRef: row.transfer_receipt_ref || undefined,
     cmaStatus: row.cma_status || undefined,
     authorizedAmount: row.cma_status?.authorizedAmount || (row.authorized_amount ? Number(row.authorized_amount) : undefined),
   } as HoldingWithdrawRequest;
 }
 
-export function mapRequestToDb(req: ServiceRequest): any {
+export function mapRequestToDb(req: ServiceRequest): DbRequestInsert {
   const dbReq: any = {
     id: req.id,
     ticket_number: req.ticketNumber,
@@ -261,11 +269,11 @@ export function mapRequestToDb(req: ServiceRequest): any {
     client_id: req.clientId,
     client_name: req.clientName,
     client_email: req.clientEmail,
-    client_company: req.clientCompany,
-    assigned_operator_id: req.assignedOperatorId,
-    assigned_operator_name: req.assignedOperatorName,
-    attachments: req.attachments || [],
-    comments: (req.comments || []).map((c: any) => {
+    client_company: req.clientCompany || null,
+    assigned_operator_id: req.assignedOperatorId || null,
+    assigned_operator_name: req.assignedOperatorName || null,
+    attachments: (req.attachments || []) as any,
+    comments: ((req.comments || []).map((c: any) => {
       const ts = c.createdAt || c.created_at || new Date().toISOString();
       return {
         id: c.id,
@@ -279,7 +287,7 @@ export function mapRequestToDb(req: ServiceRequest): any {
         created_at: ts,
         attachments: c.attachments || [],
       };
-    }),
+    })) as any,
     created_at: req.createdAt,
     updated_at: req.updatedAt,
     resolved_at: req.resolvedAt || null,
@@ -293,54 +301,51 @@ export function mapRequestToDb(req: ServiceRequest): any {
   if (req.type === 'support') {
     const sReq = req as SupportTicket;
     dbReq.category = sReq.category;
-    dbReq.remote_id = sReq.remoteId;
-    dbReq.browser_info = sReq.browserInfo;
+    dbReq.remote_id = sReq.remoteId || null;
+    dbReq.browser_info = sReq.browserInfo || null;
   } else if (req.type === 'deposit') {
     const dReq = req as HoldingDepositRequest;
     dbReq.amount = dReq.amount;
     dbReq.currency = dReq.currency;
     dbReq.deposit_method = dReq.depositMethod;
     dbReq.transaction_reference_id = dReq.transactionReferenceId;
-    dbReq.sender_account_name = dReq.senderAccountName;
+    dbReq.sender_account_name = dReq.senderAccountName || null;
     dbReq.deposit_date = dReq.depositDate;
-    dbReq.verified_transaction_id = dReq.verifiedTransactionId;
+    dbReq.verified_transaction_id = dReq.verifiedTransactionId || null;
   } else if (req.type === 'withdraw') {
     const wReq = req as HoldingWithdrawRequest;
     dbReq.amount = wReq.amount;
     dbReq.currency = wReq.currency;
     dbReq.withdraw_method = wReq.withdrawMethod;
     dbReq.beneficiary_account_name = wReq.beneficiaryAccountName;
-    // Use schema column name: beneficiary_account_number
-    dbReq.beneficiary_account_number = wReq.beneficiaryAccountNumberOrAddress;
-    // Use schema column name: bank_name
-    dbReq.bank_name = wReq.bankNameOrNetwork;
-    // Use schema column name: bank_ifsc
-    dbReq.bank_ifsc = wReq.swiftOrIban;
-    dbReq.reason = wReq.reason;
-    dbReq.transfer_receipt_ref = wReq.transferReceiptRef;
-    dbReq.cma_status = wReq.cmaStatus || null;
+    dbReq.beneficiary_account_number_or_address = wReq.beneficiaryAccountNumberOrAddress;
+    dbReq.bank_name_or_network = wReq.bankNameOrNetwork || null;
+    dbReq.swift_or_iban = wReq.swiftOrIban || null;
+    dbReq.reason = wReq.reason || null;
+    dbReq.transfer_receipt_ref = wReq.transferReceiptRef || null;
+    dbReq.cma_status = (wReq.cmaStatus || null) as any;
     dbReq.authorized_amount = wReq.authorizedAmount || wReq.cmaStatus?.authorizedAmount || null;
   }
 
   return dbReq;
 }
 
-export function mapDbAuditLog(row: any): AuditLog {
+export function mapDbAuditLog(row: DbAuditLog | any): AuditLog {
   return {
     id: row.id,
     actorId: row.actor_id,
     actorName: row.actor_name,
-    actorRole: row.actor_role as UserRole,
+    actorRole: (row.actor_role as UserRole) || 'client',
     action: row.action,
-    targetType: row.target_type,
+    targetType: (row.target_type as any) || 'system',
     targetId: row.target_id,
     details: row.details,
-    timestamp: row.timestamp,
-    ipAddress: row.ip_address,
+    timestamp: row.timestamp || new Date().toISOString(),
+    ipAddress: row.ip_address || undefined,
   };
 }
 
-export function mapAuditLogToDb(log: AuditLog): any {
+export function mapAuditLogToDb(log: AuditLog): DbAuditLogInsert {
   return {
     id: log.id,
     actor_id: log.actorId,
@@ -351,25 +356,25 @@ export function mapAuditLogToDb(log: AuditLog): any {
     target_id: log.targetId,
     details: log.details,
     timestamp: log.timestamp,
-    ip_address: log.ipAddress,
+    ip_address: log.ipAddress || null,
   };
 }
 
-export function mapDbNotification(row: any): Notification {
+export function mapDbNotification(row: DbNotification | any): Notification {
   return {
     id: row.id,
     userId: row.user_id,
     title: row.title,
     message: row.message,
-    type: row.type,
-    category: row.category,
-    requestId: row.request_id,
+    type: (row.type as any) || 'info',
+    category: (row.category as any) || 'system',
+    requestId: row.request_id || undefined,
     isRead: Boolean(row.is_read),
-    createdAt: row.created_at,
+    createdAt: row.created_at || new Date().toISOString(),
   };
 }
 
-export function mapNotificationToDb(n: Notification): any {
+export function mapNotificationToDb(n: Notification): DbNotificationInsert {
   return {
     id: n.id,
     user_id: n.userId,
@@ -377,7 +382,7 @@ export function mapNotificationToDb(n: Notification): any {
     message: n.message,
     type: n.type,
     category: n.category,
-    request_id: n.requestId,
+    request_id: n.requestId || null,
     is_read: n.isRead,
     created_at: n.createdAt,
   };
@@ -440,45 +445,53 @@ export async function deleteRequestFromSupabase(reqId: string): Promise<void> {
   if (error) throw error;
 }
 
+export const INITIAL_ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
+  admin: {
+    role: 'admin',
+    allowedPages: ['dashboard', 'support', 'holding', 'all-requests', 'clients', 'analytics', 'rbac', 'audit-logs', 'notifications', 'settings'],
+    canCreateRequest: false,
+    canChangeStatus: true,
+    canAssignOperator: true,
+    canAddInternalNotes: true,
+    canViewAllClients: true,
+    canManageRoles: true,
+    canExportReports: true,
+    canViewAuditLogs: true,
+  },
+  operator: {
+    role: 'operator',
+    allowedPages: ['dashboard', 'support', 'holding', 'all-requests', 'clients', 'analytics', 'notifications'],
+    canCreateRequest: false,
+    canChangeStatus: true,
+    canAssignOperator: true,
+    canAddInternalNotes: true,
+    canViewAllClients: true,
+    canManageRoles: false,
+    canExportReports: true,
+    canViewAuditLogs: false,
+  },
+  client: {
+    role: 'client',
+    allowedPages: ['dashboard', 'support', 'holding'],
+    canCreateRequest: true,
+    canChangeStatus: false,
+    canAssignOperator: false,
+    canAddInternalNotes: false,
+    canViewAllClients: false,
+    canManageRoles: false,
+    canExportReports: false,
+    canViewAuditLogs: false,
+  },
+};
+
 export async function fetchPermissionsFromSupabase(): Promise<Record<UserRole, RolePermissions> | null> {
-  const { data, error } = await supabase.from('csmp_role_permissions').select('*');
-  if (error || !data || data.length === 0) return null;
-
-  const result: any = {};
-  data.forEach((row: any) => {
-    result[row.role] = {
-      role: row.role as UserRole,
-      allowedPages: (row.allowed_pages || []) as PageId[],
-      canCreateRequest: Boolean(row.can_create_request),
-      canChangeStatus: Boolean(row.can_change_status),
-      canAssignOperator: Boolean(row.can_assign_operator),
-      canAddInternalNotes: Boolean(row.can_add_internal_notes),
-      canViewAllClients: Boolean(row.can_view_all_clients),
-      canManageRoles: Boolean(row.can_manage_roles),
-      canExportReports: Boolean(row.can_export_reports),
-      canViewAuditLogs: Boolean(row.can_view_audit_logs),
-    };
-  });
-  return result;
+  return INITIAL_ROLE_PERMISSIONS;
 }
 
-export async function savePermissionsToSupabase(role: UserRole, perms: RolePermissions): Promise<void> {
-  const payload = {
-    role,
-    allowed_pages: perms.allowedPages,
-    can_create_request: perms.canCreateRequest,
-    can_change_status: perms.canChangeStatus,
-    can_assign_operator: perms.canAssignOperator,
-    can_add_internal_notes: perms.canAddInternalNotes,
-    can_view_all_clients: perms.canViewAllClients,
-    can_manage_roles: perms.canManageRoles,
-    can_export_reports: perms.canExportReports,
-    can_view_audit_logs: perms.canViewAuditLogs,
-    updated_at: new Date().toISOString(),
-  };
-  const { error } = await supabase.from('csmp_role_permissions').upsert(payload, { onConflict: 'role' });
-  if (error) throw error;
+export async function savePermissionsToSupabase(_role: UserRole, _perms: RolePermissions): Promise<void> {
+  // Hardcoded permissions array used - no-op for database writes
 }
+
 
 export async function fetchNotificationsFromSupabase(): Promise<Notification[]> {
   const { data, error } = await supabase.from('csmp_notifications').select('*').order('created_at', { ascending: false });

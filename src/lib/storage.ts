@@ -86,86 +86,63 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, RolePermissions> = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Users — non-PII cache only
+// Users — localStorage REMOVED (PII & operational security)
 // ─────────────────────────────────────────────────────────────────────────────
+// Users are fetched exclusively from Supabase csmp_users via fetchUsersFromSupabase().
+// Persisting users to localStorage on shared devices exposes company names, roles,
+// and holding balances.
 
-/**
- * Returns the locally cached user list. Only non-PII operational fields
- * (id, role, status, companyName, avatarUrl, currency, estimatedHoldingBalance)
- * are stored. PII fields will be empty strings / undefined in the returned
- * objects — callers must populate them from the live Supabase session.
- */
+/** @deprecated Users are in-memory / database-only. */
 export function getStoredUsers(): User[] {
-  try {
-    const raw = localStorage.getItem(USERS_KEY);
-    if (raw) return JSON.parse(raw) as User[];
-  } catch {
-    // fallback
-  }
   return [];
 }
 
-/**
- * Persists only the non-PII subset of each user to localStorage.
- * Strips email, name, phoneNumber, account, ifsc, bank before writing.
- */
-export function saveUsers(users: User[]): void {
-  const safe = users.map(stripPii);
-  localStorage.setItem(USERS_KEY, JSON.stringify(safe));
+/** @deprecated Users are in-memory / database-only. No-op. */
+export function saveUsers(_users: User[]): void {
+  // Intentionally empty — no sensitive user metadata stored in localStorage.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Service Requests
+// Service Requests — localStorage REMOVED (Financial & PII protection)
 // ─────────────────────────────────────────────────────────────────────────────
+// Requests contain financial transaction data, amounts, bank deposit proofs,
+// support ticket contents, and client identities. They live exclusively in
+// React state and are fetched securely from Supabase using Row-Level Security.
 
+/** @deprecated Requests are in-memory / database-only. */
 export function getStoredRequests(): ServiceRequest[] {
-  try {
-    const raw = localStorage.getItem(REQUESTS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // fallback
-  }
   return [];
 }
 
-export function saveRequests(requests: ServiceRequest[]): void {
-  localStorage.setItem(REQUESTS_KEY, JSON.stringify(requests));
+/** @deprecated Requests are in-memory / database-only. No-op. */
+export function saveRequests(_requests: ServiceRequest[]): void {
+  // Intentionally empty — financial transaction data is never written to localStorage.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Role Permissions
+// Role Permissions — Hardcoded defaults
 // ─────────────────────────────────────────────────────────────────────────────
-
 export function getStoredPermissions(): Record<UserRole, RolePermissions> {
-  try {
-    const raw = localStorage.getItem(PERMISSIONS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // fallback
-  }
   return DEFAULT_PERMISSIONS;
 }
 
-export function savePermissions(perms: Record<UserRole, RolePermissions>): void {
-  localStorage.setItem(PERMISSIONS_KEY, JSON.stringify(perms));
+export function savePermissions(_perms: Record<UserRole, RolePermissions>): void {
+  // Intentionally empty — permissions use hardcoded arrays.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Notifications
+// Notifications — localStorage REMOVED
 // ─────────────────────────────────────────────────────────────────────────────
+// Notifications are fetched exclusively from Supabase and kept in-memory.
 
+/** @deprecated Notifications are in-memory / database-only. */
 export function getStoredNotifications(): Notification[] {
-  try {
-    const raw = localStorage.getItem(NOTIFICATIONS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // fallback
-  }
   return [];
 }
 
-export function saveNotifications(notifs: Notification[]): void {
-  localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifs));
+/** @deprecated Notifications are in-memory / database-only. No-op. */
+export function saveNotifications(_notifs: Notification[]): void {
+  // Intentionally empty — notifications are never written to localStorage.
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -280,7 +257,7 @@ export function resetToDemoData(): void {
   localStorage.removeItem(USERS_KEY);
   localStorage.removeItem(REQUESTS_KEY);
   localStorage.removeItem(NOTIFICATIONS_KEY);
-  localStorage.setItem(PERMISSIONS_KEY, JSON.stringify(DEFAULT_PERMISSIONS));
+  localStorage.removeItem(PERMISSIONS_KEY);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -296,8 +273,6 @@ export function clearSensitiveStorage(): void {
   localStorage.removeItem(USERS_KEY);
   localStorage.removeItem(REQUESTS_KEY);
   localStorage.removeItem(NOTIFICATIONS_KEY);
-  // Permissions are re-fetched from Supabase on each login. Without clearing,
-  // stale or admin-modified RBAC rules could persist across sessions.
   localStorage.removeItem(PERMISSIONS_KEY);
   // Navigation state — cleared so the next session starts at home
   localStorage.removeItem('csmp_current_view');

@@ -13,28 +13,132 @@ import {
   ScrollText,
   Bell,
   Settings,
-  Info,
   ChevronRight,
   Sparkles,
   Globe,
   ExternalLink,
-  X
+  X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Master page catalogue — defines icon + label for every possible page ID.
+// ─────────────────────────────────────────────────────────────────────────────
 interface NavItemConfig {
   id: PageId;
   label: string;
   icon: React.ElementType;
-  badgeCount?: (requests: any[], user: any) => number;
+  badgeCount?: (requests: any[], user: any, unread: number) => number;
 }
 
+const ALL_NAV_ITEMS: NavItemConfig[] = [
+  {
+    id: 'dashboard',
+    label: 'Dashboard',
+    icon: LayoutDashboard,
+  },
+  {
+    id: 'support',
+    label: 'Support Requests',
+    icon: Headphones,
+    badgeCount: (reqs, u) =>
+      reqs.filter(
+        r => r.type === 'support' &&
+          (u.role !== 'client' || r.clientId === u.id) &&
+          (r.status === 'pending' || r.status === 'in_progress')
+      ).length,
+  },
+  {
+    id: 'holding',
+    label: 'Limit Requests',
+    icon: WalletCards,
+    badgeCount: (reqs, u) =>
+      reqs.filter(
+        r => (r.type === 'deposit' || r.type === 'withdraw') &&
+          (u.role !== 'client' || r.clientId === u.id) &&
+          r.status === 'pending'
+      ).length,
+  },
+  {
+    id: 'all-requests',
+    label: 'All Requests',
+    icon: Inbox,
+    badgeCount: (reqs, u) =>
+      reqs.filter(r => u.role !== 'client' || r.clientId === u.id).length,
+  },
+  {
+    id: 'clients',
+    label: 'User Directory',
+    icon: Users,
+  },
+  {
+    id: 'analytics',
+    label: 'Analytics',
+    icon: BarChart3,
+  },
+  {
+    id: 'rbac',
+    label: 'Role Permissions',
+    icon: ShieldCheck,
+  },
+  {
+    id: 'audit-logs',
+    label: 'Audit Trail',
+    icon: ScrollText,
+  },
+  {
+    id: 'notifications',
+    label: 'Notification Logs',
+    icon: Bell,
+    badgeCount: (_reqs, _u, unread) => unread,
+  },
+  {
+    id: 'settings',
+    label: 'Settings & Supabase',
+    icon: Settings,
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hardcoded role navigation permissions array
+// ─────────────────────────────────────────────────────────────────────────────
+const ROLE_ALLOWED_PAGES: Record<string, PageId[]> = {
+  admin: [
+    'dashboard',
+    'support',
+    'holding',
+    'all-requests',
+    'clients',
+    'analytics',
+    'rbac',
+    'audit-logs',
+    'notifications',
+    'settings',
+  ],
+  operator: [
+    'dashboard',
+    'support',
+    'holding',
+    'all-requests',
+    'clients',
+    'analytics',
+    'notifications',
+  ],
+  client: [
+    'dashboard',
+    'support',
+    'holding',
+  ],
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sidebar Component
+// ─────────────────────────────────────────────────────────────────────────────
 export const Sidebar: React.FC = () => {
   const { user } = useAuth();
   const {
     currentPage,
     setCurrentPage,
-    isPageAllowed,
     requests,
     unreadNotifCount,
     isMobileSidebarOpen,
@@ -42,72 +146,9 @@ export const Sidebar: React.FC = () => {
     themeConfig,
   } = useApp();
 
-  const navItems: NavItemConfig[] = [
-    {
-      id: 'dashboard',
-      label: 'Dashboard',
-      icon: LayoutDashboard,
-    },
-    {
-      id: 'support',
-      label: 'Support Requests',
-      icon: Headphones,
-      badgeCount: (reqs, u) =>
-        reqs.filter(
-          r => r.type === 'support' && (u.role !== 'client' || r.clientId === u.id) && (r.status === 'pending' || r.status === 'in_progress')
-        ).length,
-    },
-    {
-      id: 'holding',
-      label: 'Limit Requests',
-      icon: WalletCards,
-      badgeCount: (reqs, u) =>
-        reqs.filter(
-          r => (r.type === 'deposit' || r.type === 'withdraw') && (u.role !== 'client' || r.clientId === u.id) && r.status === 'pending'
-        ).length,
-    },
-    {
-      id: 'all-requests',
-      label: 'All Requests',
-      icon: Inbox,
-      badgeCount: (reqs, u) =>
-        reqs.filter(r => (u.role !== 'client' || r.clientId === u.id)).length,
-    },
-    {
-      id: 'clients',
-      label: 'User Directory',
-      icon: Users,
-    },
-    {
-      id: 'analytics',
-      label: 'Analytics',
-      icon: BarChart3,
-    },
-    {
-      id: 'rbac',
-      label: 'Role Permissions',
-      icon: ShieldCheck,
-    },
-    {
-      id: 'audit-logs',
-      label: 'Audit Trail',
-      icon: ScrollText,
-    },
-    {
-      id: 'notifications',
-      label: 'Notification Logs',
-      icon: Bell,
-      badgeCount: () => unreadNotifCount,
-    },
-    {
-      id: 'settings',
-      label: 'Settings & Supabase',
-      icon: Settings,
-    },
-  ];
-
-  // Filter items allowed by role RBAC
-  const visibleNavItems = navItems.filter(item => isPageAllowed(item.id));
+  const userRole = user?.role || 'client';
+  const allowedPageIds = ROLE_ALLOWED_PAGES[userRole] || ROLE_ALLOWED_PAGES.client;
+  const visibleNavItems = ALL_NAV_ITEMS.filter(item => allowedPageIds.includes(item.id));
 
   const handleNavClick = (pageId: PageId) => {
     setCurrentPage(pageId);
@@ -144,33 +185,35 @@ export const Sidebar: React.FC = () => {
         </div>
 
         {/* Section Label */}
-        <div className="px-2 mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-          Navigation
+        <div className="px-2 mb-2 flex items-center justify-between">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            Navigation
+          </span>
         </div>
 
-        {/* Links */}
+        {/* Links — built from hardcoded role permissions */}
         <nav className="space-y-1">
           {visibleNavItems.map(item => {
             const Icon = item.icon;
             const isActive = currentPage === item.id;
-            const count = item.badgeCount ? item.badgeCount(requests, user) : 0;
+            const count = item.badgeCount
+              ? item.badgeCount(requests, user, unreadNotifCount)
+              : 0;
 
             return (
               <button
                 key={item.id}
                 id={`sidebar-nav-item-${item.id}`}
                 onClick={() => handleNavClick(item.id)}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all group ${
-                  isActive
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                    : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
-                }`}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-all group ${isActive
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                  : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+                  }`}
               >
                 <div className="flex items-center gap-3 truncate">
                   <Icon
-                    className={`w-4 h-4 shrink-0 transition-colors ${
-                      isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'
-                    }`}
+                    className={`w-4 h-4 shrink-0 transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'
+                      }`}
                   />
                   <span className="truncate">{item.label}</span>
                 </div>
@@ -178,11 +221,10 @@ export const Sidebar: React.FC = () => {
                 <div className="flex items-center gap-1.5 shrink-0 ml-2">
                   {count > 0 && (
                     <span
-                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                        isActive
-                          ? 'bg-white text-indigo-700'
-                          : 'bg-slate-800 text-indigo-300 border border-slate-700'
-                      }`}
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isActive
+                        ? 'bg-white text-indigo-700'
+                        : 'bg-slate-800 text-indigo-300 border border-slate-700'
+                        }`}
                     >
                       {count}
                     </span>
