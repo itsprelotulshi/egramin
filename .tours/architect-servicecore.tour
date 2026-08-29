@@ -1,0 +1,115 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "ServiceCore — Architecture Tour",
+  "description": "End-to-end walkthrough of the ServiceCore CSMP architecture: boot, identity, RBAC, data layer, offline fallback, the request lifecycle, and the RLS trust boundary.",
+  "ref": "main",
+  "steps": [
+    {
+      "directory": "src",
+      "title": "ServiceCore Source Root",
+      "description": "All runtime code for the platform lives under src/. This is ServiceCore, an enterprise CSMP/CRM for financial service desks. Layers from top down: components (UI), context (state), lib (data access & security), types (models). As you follow this tour you'll trace one support request from the browser all the way down to Postgres RLS."
+    },
+    {
+      "file": "src/main.tsx",
+      "line": 7,
+      "title": "Application Entry",
+      "description": "React 19 createRoot renders the whole app inside an ErrorBoundary and StrictMode. Notice there is no router library — navigation is hash-driven (AppContext reads window.location.hash). The single <App /> component here flows straight into provider composition next."
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 178,
+      "title": "Provider Composition",
+      "description": "App is AuthProvider > AppProvider > AppContent. AppContent branches the entire view tree: public Home, the AuthScreen, the pending-approval gate, or the authenticated MainLayout. Every persona converges on this stack, and the earlier a gating decision lives in it, the more broadly it applies."
+    },
+    {
+      "directory": "src/components",
+      "title": "Module Map",
+      "description": "Feature modules are split by persona surface: auth (sign-in, persona switcher, approval), dashboard (KPI + SLA), requests (tickets / holding / ledger), crm (client directory), rbac (permission matrix), audit (immutable logs), notifications, analytics, settings, and common (Toast / Badge / ErrorBoundary). Each folder is a small tree you'll navigate quickly once the context providers below are clear."
+    },
+    {
+      "file": "src/context/AuthContext.tsx",
+      "line": 67,
+      "title": "Auth & Session State",
+      "description": "AuthProvider owns the session: allUsers, the Supabase Session, isAuthenticated, and approval state. signInWithPassword, signUpWithPassword, magic-link OTP, and password reset all land here (lines 321-537). The approval pipeline (approveUser / rejectUser, line 614) is what turns a registered-but-pending user into a live account — so the real gate for entry is this file plus the DB trigger, not the login form. New sessions also re-sync the users table so a role change propagates without a logout."
+    },
+    {
+      "file": "src/context/AuthContext.tsx",
+      "line": 192,
+      "title": "Supabase Identity → App User",
+      "description": "matchUserToSession reconciles a Supabase auth user (auth.uid()) with a row in the app's csmp_users table, by email / auth_user_id, then applies the stored role and status. If no row matches, the user is stamped pending — which is exactly why PendingApprovalScreen exists. Gotcha: a person can be authenticated to Supabase yet have no ServiceCore identity until an admin approves them."
+    },
+    {
+      "file": "src/context/AppContext.tsx",
+      "line": 293,
+      "title": "Global App State",
+      "description": "AppProvider is the largest block (~1.8k lines). It owns requests, permissions, notifications, auditLogs, filters, theme, routing (currentView / currentPage from the hash), and every create / update / delete mutation. Components only ever call these callbacks — they never touch localStorage or Supabase directly. That single choke point is what makes the offline fallback and audit trail feasible."
+    },
+    {
+      "file": "src/context/AppContext.tsx",
+      "selection": {
+        "start": { "line": 637, "character": 0 },
+        "end": { "line": 649, "character": 0 }
+      },
+      "title": "RBAC Decision Point (allowedPages)",
+      "description": "The live permission set for the current role is resolved here: permissions[userRole] ?? DEFAULT_PERMISSIONS[role], which yields allowedPages and therefore isPageAllowed. A useEffect (line 645) force-redirects to dashboard whenever the page isn't allowed, so RBAC re-evaluates reactively when permissions or role change. This block is the single source of truth for what a persona can open."
+    },
+    {
+      "file": "src/App.tsx",
+      "line": 37,
+      "title": "RBAC Enforcement at Render",
+      "description": "MainLayout defers to the same isPageAllowed from context but renders an 'Access Restricted' ShieldAlert screen instead of silently navigating. The split is deliberate: AppContext decides, App.tsx enforces. Gotcha: this is client-side UX gating only — the server trusts RLS (see the schema steps), never this switch."
+    },
+    {
+      "file": "src/lib/supabase.ts",
+      "line": 44,
+      "title": "Supabase Client / Mock Proxy",
+      "description": "If VITE_SUPABASE_URL and the anon key are configured, a live client is created with persistSession: false — the JWT stays in memory only and never touches localStorage, a deliberate XSS hardening (comment at lines 47-52). If the env is missing, `supabase` becomes a safe Proxy mock so the app still boots in demo mode. Implication: offline-first behavior is architectural by design, not incidental."
+    },
+    {
+      "file": "src/lib/supabase.ts",
+      "line": 132,
+      "title": "Schema Mappers (DB ↔ UI)",
+      "description": "mapDbUser / mapDbRequest / mapDbAuditLog / mapDbNotification convert Supabase rows into the app's camelCase models, and the *_toDb reverse mappers serialize them back. Every context call goes through these, so the DB schema can evolve without touching component logic. Watch for field-name drift risk whenever the generated types (src/types/supabase.types.ts) are regenerated."
+    },
+    {
+      "file": "src/lib/storage.ts",
+      "line": 18,
+      "title": "LocalStorage Fallback Cache",
+      "description": "The csmp_*_v1 keys mirror the same collections in the browser. stripPii (line 36) deliberately drops PII from cached users. Data flows Supabase → state → saveToStorage, and on boot the storage hydrates before Supabase responds. Combined with AppContext's BroadcastChannel and Supabase realtime channels, multiple tabs converge without a server round-trip each time."
+    },
+    {
+      "file": "src/components/rbac/RolePermissionMatrix.tsx",
+      "line": 16,
+      "title": "Editing Permissions (Admin)",
+      "description": "Admins toggle pages and capabilities per role; the admin row is locked for dashboard and rbac. On change, AppContext upserts the row into csmp_role_permissions and recordAudit() logs MODIFIED_RBAC_PERMISSIONS. Gotcha: the edit goes live in other tabs immediately via the realtime channel — RBAC is live-wired, not refreshed-on-login."
+    },
+    {
+      "file": "src/components/requests/SupportTicketsView.tsx",
+      "line": 24,
+      "title": "Support Ticket Workflow",
+      "description": "The staff- and client-facing list. It gate-keeps creation with permissions.canCreateRequest and a role check (line 43): clients create, staff manage categories and assignment. Every create passes through openCreateModal → CreateRequestModal → createSupportTicket. This is the UI end of the request lifecycle you'll see mutate the ledger next."
+    },
+    {
+      "file": "src/context/AppContext.tsx",
+      "line": 740,
+      "title": "createSupportTicket (the mutation core)",
+      "description": "This function is the template for every mutation: build the request with a ticket number, setRequests + saveRequests (cache), saveRequestToSupabase, recordAudit('CREATED_SUPPORT_TICKET', ...), and dispatchNotification to stakeholders. The same shape recurs in createHoldingDeposit and createHoldingWithdraw. Gotcha: the audit, notification, and cache writes are fire-and-forget — a failure here degrades silently to offline mode rather than erroring the user."
+    },
+    {
+      "file": "supabase/schema.sql",
+      "line": 143,
+      "title": "Schema + Row-Level Security",
+      "description": "Five tables — csmp_users, csmp_requests, csmp_role_permissions, csmp_notifications, csmp_audit_logs — all have ROW LEVEL SECURITY ENABLED here. Every policy funnels through get_auth_role() and auth.uid(), so a client cannot read another company's request rows. This is the real authorization barrier; the React RBAC you read earlier is only a presentation-layer gate in front of it. Provision the schema locally with `npm run db:migrate` (scripts/migrate.ts)."
+    },
+    {
+      "file": "supabase/schema.sql",
+      "line": 175,
+      "title": "RLS: get_auth_role() trust boundary",
+      "description": "get_auth_role() resolves the app-level role with 'SELECT role FROM public.csmp_users WHERE auth_user_id = auth.uid()'. Policies then layer in a service_role override, admin/operator sweeps, or row-level ownership checks. The audit table deliberately has no UPDATE or DELETE policy — that immutability is the compliance guarantee, and it lives in SQL, not the client."
+    },
+    {
+      "title": "Next Steps",
+      "description": "You can now trace a support request end to end: UI (SupportTicketsView) → context mutation (createSupportTicket) → cache (storage) → Supabase (mappers) with RLS enforcing ownership. To add a feature, follow the pattern: model in types, a mapper in lib/supabase.ts, a provider callback + RBAC gate in AppContext, then a component reading from the context."
+    }
+  ]
+}
