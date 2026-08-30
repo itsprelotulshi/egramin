@@ -9,7 +9,7 @@ import empty from '../assets/lottie/empty.json';
 
 export type LottieName = 'loading' | 'success' | 'empty';
 
-export const LOTTIE_ASSETS: Record<LottieName, unknown> = {
+export const LOTTIE_ASSETS: Record<LottieName, object> = {
   loading,
   success,
   empty,
