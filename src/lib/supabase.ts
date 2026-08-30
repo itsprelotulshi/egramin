@@ -247,9 +247,9 @@ export function mapDbRequest(row: DbRequest | any): ServiceRequest {
     currency: row.currency || 'USD',
     withdrawMethod: row.withdraw_method || 'bank_wire',
     beneficiaryAccountName: row.beneficiary_account_name || '',
-    beneficiaryAccountNumberOrAddress: row.beneficiary_account_number_or_address || '',
-    bankNameOrNetwork: row.bank_name_or_network || undefined,
-    swiftOrIban: row.swift_or_iban || undefined,
+    beneficiaryAccountNumberOrAddress: row.beneficiary_account_number || '',
+    bankNameOrNetwork: row.bank_name || undefined,
+    swiftOrIban: row.bank_ifsc || undefined,
     reason: row.reason || undefined,
     transferReceiptRef: row.transfer_receipt_ref || undefined,
     cmaStatus: row.cma_status || undefined,
@@ -318,9 +318,9 @@ export function mapRequestToDb(req: ServiceRequest): DbRequestInsert {
     dbReq.currency = wReq.currency;
     dbReq.withdraw_method = wReq.withdrawMethod;
     dbReq.beneficiary_account_name = wReq.beneficiaryAccountName;
-    dbReq.beneficiary_account_number_or_address = wReq.beneficiaryAccountNumberOrAddress;
-    dbReq.bank_name_or_network = wReq.bankNameOrNetwork || null;
-    dbReq.swift_or_iban = wReq.swiftOrIban || null;
+    dbReq.beneficiary_account_number = wReq.beneficiaryAccountNumberOrAddress;
+    dbReq.bank_name = wReq.bankNameOrNetwork || null;
+    dbReq.bank_ifsc = wReq.swiftOrIban || null;
     dbReq.reason = wReq.reason || null;
     dbReq.transfer_receipt_ref = wReq.transferReceiptRef || null;
     dbReq.cma_status = (wReq.cmaStatus || null) as any;
@@ -409,18 +409,77 @@ export async function fetchRequestsFromSupabase(): Promise<ServiceRequest[]> {
   return (data || []).map(mapDbRequest);
 }
 
+// -------------------------------------------------------------
+// Collision-resistant identifiers & ticket numbers
+// -------------------------------------------------------------
+// Request ids and ticket numbers must be unique app-wide. The old
+// scheme derived numbers from the in-memory request list (which is
+// empty on every fresh load), so two clients could generate the same
+// ticket_number and hit the UNIQUE constraint. A random suffix makes
+// each value distinct without a DB round-trip.
+export function generateRequestId(prefix = 'req'): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function generateTicketNumber(type: ServiceRequest['type'], counter: number): string {
+  const prefix = type === 'support' ? 'TCK' : 'HLD';
+  const offset = type === 'support' ? 101 : type === 'deposit' ? 201 : 301;
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `${prefix}-${new Date().getFullYear()}-${counter + offset}-${suffix}`;
+}
+
+// Lightweight in-memory queue for requests whose Supabase write failed
+// (e.g. transient network outage). Retried on the app's heartbeat.
+const pendingSyncQueue: ServiceRequest[] = [];
+
+export function queueRequestForRetry(req: ServiceRequest): void {
+  if (!pendingSyncQueue.some(r => r.id === req.id)) pendingSyncQueue.push(req);
+}
+
+export async function flushPendingRequestSync(): Promise<void> {
+  for (const req of [...pendingSyncQueue]) {
+    try {
+      await saveRequestToSupabase(req);
+      pendingSyncQueue.splice(pendingSyncQueue.indexOf(req), 1);
+    } catch (err: any) {
+      console.warn(`Still unable to sync ${req.ticketNumber}:`, err.message);
+    }
+  }
+}
+
 export async function saveRequestToSupabase(req: ServiceRequest): Promise<void> {
   const payload = mapRequestToDb(req);
-  const { error } = await supabase.from('csmp_requests').upsert(payload, { onConflict: 'id' });
+
+  const attempt = (ticketNumber: string) =>
+    supabase.from('csmp_requests').upsert(
+      { ...payload, ticket_number: ticketNumber },
+      { onConflict: 'id' }
+    );
+
+  let { error } = await attempt(req.ticketNumber);
   if (error) {
     console.warn('Initial Supabase upsert error:', error.message, error.details || '');
+    // ticket_number UNIQUE constraint collision → retry once with a fresh suffix.
+    if (error.message && /unique|duplicate/i.test(error.message)) {
+      const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+      const collisionRetry = await attempt(`${req.ticketNumber}-${suffix}`);
+      if (!collisionRetry.error) return;
+      error = collisionRetry.error;
+      console.warn('Ticket-number collision retry failed:', error.message);
+    }
     // Graceful fallback: strip columns that may not yet exist in older schema deployments
-    const fallbackPayload = { ...payload };
+    // Typed loosely: the generated DbRequestInsert type is stale (describes a
+    // newer schema than the live DB), so column names here reflect the actual
+    // database rather than the type definitions.
+    const fallbackPayload: any = { ...payload };
     delete fallbackPayload.cma_status;
     delete fallbackPayload.authorized_amount;
     delete fallbackPayload.transfer_receipt_ref;
     delete fallbackPayload.resolved_at;
     delete fallbackPayload.client_company;
+    delete fallbackPayload.beneficiary_account_number;
+    delete fallbackPayload.bank_name;
+    delete fallbackPayload.bank_ifsc;
     delete fallbackPayload.delete_requested;
     delete fallbackPayload.delete_requested_by;
     delete fallbackPayload.delete_requested_by_id;

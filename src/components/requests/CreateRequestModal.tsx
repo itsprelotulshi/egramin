@@ -134,7 +134,7 @@ export const CreateRequestModal: React.FC = () => {
     setIsCreateModalOpen(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Block submission if there is no valid live auth session
@@ -145,7 +145,7 @@ export const CreateRequestModal: React.FC = () => {
 
     if (activeTab === 'support') {
       if (!supportTitle.trim()) return;
-      const newReq = createSupportTicket({
+      const newReq = await createSupportTicket({
         title: supportTitle.trim(),
         description: supportDesc.trim() || 'No additional technical notes provided.',
         category: supportCategory,
@@ -159,7 +159,7 @@ export const CreateRequestModal: React.FC = () => {
     } else if (activeTab === 'deposit') {
       const amt = parseFloat(depositAmount);
       if (isNaN(amt) || amt <= 0 || !depositTxRef.trim()) return;
-      const newReq = createHoldingDeposit({
+      const newReq = await createHoldingDeposit({
         amount: amt,
         currency: depositCurrency,
         depositMethod,
@@ -174,7 +174,7 @@ export const CreateRequestModal: React.FC = () => {
     } else if (activeTab === 'withdraw') {
       const amt = parseFloat(withdrawAmount);
       if (isNaN(amt) || amt <= 0 || !beneficiaryName.trim() || !beneficiaryAccount) return;
-      const newReq = createHoldingWithdraw({
+      const newReq = await createHoldingWithdraw({
         amount: amt,
         currency: withdrawCurrency,
         withdrawMethod,
