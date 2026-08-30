@@ -1186,8 +1186,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         [`${step}By`]: checked ? user.name : undefined,
       };
 
+      // The authorized amount is captured at the Configure (C) step and reused
+      // through Authorize (A). Un-checking either clears the recorded amount.
       let finalAuthorizedAmount = withdrawReq.authorizedAmount;
-      if (step === 'authorize') {
+      if (step === 'configure' || step === 'authorize') {
         if (checked) {
           finalAuthorizedAmount = authorizedAmount !== undefined ? authorizedAmount : (currentCma.authorizedAmount || withdrawReq.amount);
           newCma.authorizedAmount = finalAuthorizedAmount;

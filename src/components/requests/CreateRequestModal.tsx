@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+import { uploadAttachmentsToSupabase } from '../../lib/supabase';
 import { RequestType, RequestPriority, SupportTicket, HoldingDepositRequest, HoldingWithdrawRequest } from '../../types';
 import {
   X,
@@ -25,6 +26,7 @@ interface AttachedFile {
   size: number;
   type: string;
   url: string;
+  file?: File;
 }
 
 export const CreateRequestModal: React.FC = () => {
@@ -102,6 +104,7 @@ export const CreateRequestModal: React.FC = () => {
             size: file.size,
             type: file.type,
             url: dataUrl,
+            file,
           },
         ]);
       };
@@ -143,6 +146,24 @@ export const CreateRequestModal: React.FC = () => {
       return;
     }
 
+    // Attachments are mandatory for support & deposit requests (per product rules).
+    const requiresAttachment = activeTab === 'support' || activeTab === 'deposit';
+    if (requiresAttachment && attachments.length === 0) {
+      setUploadError('Attachment is required. Please upload at least one file (screenshot or document).');
+      toast('An attachment is required for this request type.', 'error');
+      return;
+    }
+
+    // Upload selected files to Supabase Storage (degrades to local preview on failure).
+    let uploadedAttachments = attachments;
+    try {
+      const ownerId = user?.id || '';
+      const uploaded = await uploadAttachmentsToSupabase(ownerId, attachments);
+      if (uploaded.length > 0) uploadedAttachments = uploaded;
+    } catch {
+      // Upload helper already self-degrades; keep the in-memory previews.
+    }
+
     if (activeTab === 'support') {
       if (!supportTitle.trim()) return;
       const newReq = await createSupportTicket({
@@ -152,7 +173,7 @@ export const CreateRequestModal: React.FC = () => {
         priority: supportPriority,
         remoteId: remote,
         browserInfo: navigator.userAgent,
-        attachments,
+        attachments: uploadedAttachments,
       });
       handleClose();
       setActiveRequest(newReq);
@@ -167,7 +188,7 @@ export const CreateRequestModal: React.FC = () => {
         senderAccountName: depositSender.trim(),
         depositDate,
         description: depositDesc.trim() || `Deposit update request of ${depositCurrency} ${amt.toLocaleString()} via ${depositMethod.toUpperCase()}`,
-        attachments,
+        attachments: uploadedAttachments,
       });
       handleClose();
       setActiveRequest(newReq);
@@ -184,7 +205,7 @@ export const CreateRequestModal: React.FC = () => {
         swiftOrIban: ifscCode.trim(),
         reason: withdrawReason.trim(),
         description: withdrawDesc.trim() || `Holding withdrawal request of ${withdrawCurrency} ${amt.toLocaleString()} to ${beneficiaryName}`,
-        attachments,
+        attachments: uploadedAttachments,
       });
       handleClose();
       setActiveRequest(newReq);
@@ -639,6 +660,9 @@ export const CreateRequestModal: React.FC = () => {
             <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                 Attachments & Proofs (Screenshots, PDFs, Receipts)
+                {(activeTab === 'support' || activeTab === 'deposit') && (
+                  <span className="ml-1 text-rose-500 dark:text-rose-400">* Required</span>
+                )}
               </label>
 
               {/* Drag & Drop Area */}

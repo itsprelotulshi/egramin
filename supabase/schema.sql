@@ -478,3 +478,31 @@ BEGIN
   END;
 END $$;
 
+-- -------------------------------------------------------------
+-- STORAGE: Request attachments bucket
+-- -------------------------------------------------------------
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('csmp-attachments', 'csmp-attachments', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Authenticated users can upload files; anyone (incl. anon with public URL) can read
+DROP POLICY IF EXISTS "csmp-attachments-public-read" ON storage.objects;
+CREATE POLICY "csmp-attachments-public-read" ON storage.objects
+  FOR SELECT USING (bucket_id = 'csmp-attachments');
+
+DROP POLICY IF EXISTS "csmp-attachments-auth-insert" ON storage.objects;
+CREATE POLICY "csmp-attachments-auth-insert" ON storage.objects
+  FOR INSERT WITH CHECK (
+    bucket_id = 'csmp-attachments'
+    AND (auth.role() IN ('authenticated', 'service_role'))
+  );
+
+-- Allow creators to delete their own uploads
+DROP POLICY IF EXISTS "csmp-attachments-auth-delete" ON storage.objects;
+CREATE POLICY "csmp-attachments-auth-delete" ON storage.objects
+  FOR DELETE USING (
+    bucket_id = 'csmp-attachments'
+    AND (auth.role() IN ('authenticated', 'service_role'))
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
+

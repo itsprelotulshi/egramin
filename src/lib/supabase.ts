@@ -159,7 +159,7 @@ export function mapUserToDb(u: User): DbUserInsert {
     avatar_url: u.avatarUrl || null,
     company_name: u.companyName || null,
     phone_number: u.phoneNumber || null,
-    account: u.account ? Number(u.account) || null : null,
+    account: u.account || null,
     ifsc: u.ifsc || null,
     bank: u.bank || null,
     estimated_holding_balance: u.estimatedHoldingBalance ?? null,
@@ -638,4 +638,126 @@ export async function checkSupabaseHealth(): Promise<{
       error: 'Could not reach database. Check your connection or Supabase project status.',
     };
   }
+}
+
+// -------------------------------------------------------------
+// STORAGE: Request attachments
+// -------------------------------------------------------------
+const ATTACHMENT_BUCKET = 'csmp-attachments';
+
+function sanitizeAttachmentName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 80) || 'file';
+}
+
+/**
+ * Upload a set of files to the `csmp-attachments` Storage bucket and return
+ * Attachment records (public URLs) ready to store on a request.
+ *
+ * Falls back to local data-URL attachments when Supabase is not configured or
+ * the upload fails, so the client UI never hard-crashes on a storage outage.
+ */
+export type UploadableAttachment =
+  | File
+  | Attachment
+  | { name: string; size: number; type: string; url: string; file?: File };
+
+/** Resolve the raw bytes to upload, if any, from a local record or File. */
+function resolveSourceFile(f: UploadableAttachment): File | null {
+  if (f instanceof File) return f;
+  const maybe = (f as { file?: File }).file;
+  return maybe || null;
+}
+
+export async function uploadAttachmentsToSupabase(
+  ownerId: string,
+  files: UploadableAttachment[],
+): Promise<Attachment[]> {
+  const uploaded: Attachment[] = [];
+  const nowIso = new Date().toISOString();
+
+  if (!isSupabaseConfigured) {
+    // Offline/demo: keep in-memory data URLs (no real Storage).
+    for (const f of files) {
+      uploaded.push(await normalizeAttachment(f, 'local-' + Math.random().toString(36).slice(2, 8), nowIso, ownerId));
+    }
+    return uploaded;
+  }
+
+  for (const f of files) {
+    // Already an uploaded Attachment -> pass through untouched.
+    if (!(f instanceof File) && (f as Attachment).id) {
+      uploaded.push(f as Attachment);
+      continue;
+    }
+
+    // A local preview without raw bytes cannot reach Storage — keep its data URL.
+    const rawFile = resolveSourceFile(f);
+    if (!rawFile) {
+      uploaded.push(await normalizeAttachment(f, 'local-' + Math.random().toString(36).slice(2, 8), nowIso, ownerId));
+      continue;
+    }
+
+    try {
+      const safeName = sanitizeAttachmentName(rawFile.name);
+      const path = `uploads/${ownerId}/${Date.now()}_${safeName}`;
+      const { error } = await supabase.storage
+        .from(ATTACHMENT_BUCKET)
+        .upload(path, rawFile, { upsert: false, contentType: rawFile.type || 'application/octet-stream' });
+      if (error) throw error;
+      const { data: pub } = supabase.storage.from(ATTACHMENT_BUCKET).getPublicUrl(path);
+      const url = pub?.publicUrl || '';
+      uploaded.push(toAttachment(rawFile, 'att_' + Math.random().toString(36).slice(2, 10), url, nowIso, ownerId));
+    } catch (err: any) {
+      // Storage unreachable -> degrade to an in-memory preview so the request still goes through.
+      console.warn('Attachment upload failed, using local preview:', err?.message);
+      uploaded.push(await normalizeAttachment(f, 'local-' + Math.random().toString(36).slice(2, 8), nowIso, ownerId));
+    }
+  }
+  return uploaded;
+}
+
+async function normalizeAttachment(
+  f: UploadableAttachment,
+  id: string,
+  uploadedAt: string,
+  uploadedBy: string,
+): Promise<Attachment> {
+  if (f instanceof File) {
+    return toAttachment(f, id, await fileToDataUrl(f), uploadedAt, uploadedBy);
+  }
+  const rawFile = (f as { file?: File }).file;
+  if (rawFile) {
+    return toAttachment(rawFile, id, (f as any).url || await fileToDataUrl(rawFile), uploadedAt, uploadedBy);
+  }
+  // Local preview object (name/size/type/url) — preserve its data URL.
+  return {
+    id,
+    name: (f as any).name || 'attachment',
+    size: (f as any).size || 0,
+    type: (f as any).type || 'application/octet-stream',
+    url: (f as any).url || '',
+    uploadedAt,
+    uploadedBy,
+  };
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function toAttachment(f: File, id: string, url: string, uploadedAt: string, uploadedBy: string): Attachment {
+  return {
+    id,
+    name: f.name,
+    size: f.size,
+    type: f.type || 'application/octet-stream',
+    url,
+    uploadedAt,
+    uploadedBy,
+  };
 }
