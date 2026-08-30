@@ -3,6 +3,9 @@ import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { StatusBadge, PriorityBadge, TypeBadge } from '../common/Badge';
 import { formatHeaderDateIST, formatShortDateIST } from '../../lib/dateUtils';
+import { motion } from 'motion/react';
+import { staggerContainer, staggerItem, fadeUp } from '../../lib/animations';
+import { AnimatedNumber } from '../common/AnimatedNumber';
 import {
   Layers,
   Clock,
@@ -51,7 +54,13 @@ export const DashboardOverview: React.FC = () => {
   return (
     <div id="dashboard-overview-page" className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Top Banner / Welcome */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 text-white p-6 rounded-2xl shadow-xl border border-indigo-900/40 brand-glow">
+      <motion.div
+        variants={fadeUp}
+        initial="hidden"
+        animate="visible"
+        transition={{ duration: 0.5 }}
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-grad-brand-deep text-white p-6 rounded-2xl shadow-xl border border-emerald-900/40 brand-glow"
+      >
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase tracking-wider">
@@ -79,14 +88,14 @@ export const DashboardOverview: React.FC = () => {
             <button
               id="dashboard-new-request-btn"
               onClick={() => openCreateModal('support')}
-              className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-98 text-white text-xs sm:text-sm font-bold shadow-lg shadow-indigo-600/30 flex items-center gap-2 transition-all"
+              className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white text-xs sm:text-sm font-bold shadow-lg shadow-emerald-600/30 flex items-center gap-2 transition-all"
             >
               <Plus className="w-4 h-4" />
               <span>Create Request</span>
             </button>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {/* Urgent Alert Banner (if any) */}
       {urgentCount > 0 && (
@@ -146,9 +155,16 @@ export const DashboardOverview: React.FC = () => {
       )}
 
       {/* Metric Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <motion.div
+        variants={staggerContainer}
+        initial="hidden"
+        animate="visible"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+      >
         {/* Card 1: Pending */}
-        <div
+        <motion.div
+          variants={staggerItem}
+          whileHover={{ y: -4 }}
           onClick={() => setCurrentPage('all-requests')}
           className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition-all cursor-pointer group"
         >
@@ -161,9 +177,10 @@ export const DashboardOverview: React.FC = () => {
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
-              {pendingCount}
-            </span>
+            <AnimatedNumber
+              value={pendingCount}
+              className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white"
+            />
             <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
               Awaiting triage
             </span>
@@ -172,10 +189,12 @@ export const DashboardOverview: React.FC = () => {
             <span>Needs Operator</span>
             <span className="font-semibold text-slate-600 dark:text-slate-300">Active</span>
           </div>
-        </div>
+        </motion.div>
 
         {/* Card 2: In Progress */}
-        <div
+        <motion.div
+          variants={staggerItem}
+          whileHover={{ y: -4 }}
           onClick={() => setCurrentPage('all-requests')}
           className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition-all cursor-pointer group"
         >
@@ -188,9 +207,10 @@ export const DashboardOverview: React.FC = () => {
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
-              {inProgressCount}
-            </span>
+            <AnimatedNumber
+              value={inProgressCount}
+              className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white"
+            />
             <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
               Being fulfilled
             </span>
@@ -199,10 +219,12 @@ export const DashboardOverview: React.FC = () => {
             <span>Active processing</span>
             <span className="font-semibold text-slate-600 dark:text-slate-300">Assigned</span>
           </div>
-        </div>
+        </motion.div>
 
         {/* Card 3: Resolved */}
-        <div
+        <motion.div
+          variants={staggerItem}
+          whileHover={{ y: -4 }}
           onClick={() => setCurrentPage('all-requests')}
           className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition-all cursor-pointer group"
         >
@@ -215,9 +237,10 @@ export const DashboardOverview: React.FC = () => {
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
-              {completedCount}
-            </span>
+            <AnimatedNumber
+              value={completedCount}
+              className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white"
+            />
             <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
               Resolved
             </span>
@@ -226,10 +249,12 @@ export const DashboardOverview: React.FC = () => {
             <span>SLA Compliance</span>
             <span className="font-semibold text-emerald-600 dark:text-emerald-400">98.4%</span>
           </div>
-        </div>
+        </motion.div>
 
         {/* Card 4: Total Holding Volume Tracked */}
-        <div
+        <motion.div
+          variants={staggerItem}
+          whileHover={{ y: -4 }}
           onClick={() => setCurrentPage('holding')}
           className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition-all cursor-pointer group"
         >
@@ -237,28 +262,36 @@ export const DashboardOverview: React.FC = () => {
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
               Holding Volume
             </span>
-            <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform">
+            <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform">
               <Wallet className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
-              ${(totalDepositVolumeUSD + totalWithdrawVolumeUSD).toLocaleString()}
-            </span>
+            <AnimatedNumber
+              value={totalDepositVolumeUSD + totalWithdrawVolumeUSD}
+              prefix="$"
+              className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white"
+            />
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
             <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-0.5">
               <ArrowDownRight className="w-3 h-3" /> +${totalDepositVolumeUSD.toLocaleString()}
             </span>
-            <span className="text-indigo-600 dark:text-indigo-400 font-medium flex items-center gap-0.5">
+            <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-0.5">
               <ArrowUpRight className="w-3 h-3" /> -${totalWithdrawVolumeUSD.toLocaleString()}
             </span>
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* Recent Requests Table Section */}
-      <div className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+      <motion.div
+        variants={fadeUp}
+        initial="hidden"
+        animate="visible"
+        transition={{ delay: 0.15, duration: 0.5 }}
+        className="p-5 sm:p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm"
+      >
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-base font-bold text-slate-900 dark:text-white">
@@ -271,7 +304,7 @@ export const DashboardOverview: React.FC = () => {
           <button
             id="view-all-requests-link-btn"
             onClick={() => setCurrentPage('all-requests')}
-            className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+            className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
           >
             View All ({userVisibleReqs.length}) <ArrowRight className="w-3.5 h-3.5" />
           </button>
@@ -304,7 +337,7 @@ export const DashboardOverview: React.FC = () => {
                   <td className="py-3.5 px-3">
                     <TypeBadge type={req.type} />
                   </td>
-                  <td className="py-3.5 px-3 font-medium text-slate-800 dark:text-slate-200 max-w-xs truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                  <td className="py-3.5 px-3 font-medium text-slate-800 dark:text-slate-200 max-w-xs truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
                     {req.title}
                   </td>
                   <td className="py-3.5 px-3 text-slate-600 dark:text-slate-300 truncate max-w-[140px]">
@@ -324,7 +357,7 @@ export const DashboardOverview: React.FC = () => {
             </tbody>
           </table>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

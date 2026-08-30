@@ -34,6 +34,7 @@ import {
   Palette,
 } from 'lucide-react';
 import { NotificationDrawer } from '../notifications/NotificationDrawer';
+import { AnimatePresence, motion } from 'motion/react';
 
 interface NavbarProps {
   onToggleSidebar?: () => void;
@@ -142,7 +143,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
               onChange={(e) => {
                 setFilters(prev => ({ ...prev, searchQuery: e.target.value }));
               }}
-              className="w-full pl-9 pr-4 py-1.5 text-xs sm:text-sm rounded-lg bg-slate-100 dark:bg-slate-800 border-none focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100 placeholder-slate-400 transition-all"
+              className="w-full pl-9 pr-4 py-1.5 text-xs sm:text-sm rounded-lg bg-slate-100 dark:bg-slate-800 border-none focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100 placeholder-slate-400 transition-all"
             />
             {filters.searchQuery && (
               <button
@@ -167,7 +168,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
             aria-label="Refresh latest updates from database"
           >
             <RefreshCw
-              className={`w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 ${isSyncing ? 'animate-spin' : ''
+              className={`w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 ${isSyncing ? 'animate-spin' : ''
                 }`}
             />
             <span className="hidden md:inline">
@@ -213,14 +214,14 @@ export const Navbar: React.FC<NavbarProps> = () => {
           <div
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border ${session
               ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
-              : 'border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300'
+              : 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
               }`}
             title="Supabase Auth Session Status"
           >
             {session ? (
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             ) : (
-              <LogIn className="w-3.5 h-3.5 text-indigo-500" />
+              <LogIn className="w-3.5 h-3.5 text-emerald-500" />
             )}
             <span className="hidden sm:inline">
               {session ? 'Active' : 'In-Active'}
@@ -232,7 +233,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
             <button
               id="user-profile-menu-btn"
               onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
-              className="flex items-center gap-2 p-1 rounded-full hover:ring-2 hover:ring-indigo-500/30 transition-all"
+              className="flex items-center gap-2 p-1 rounded-full hover:ring-2 hover:ring-emerald-500/30 transition-all"
             >
               <img
                 src={user?.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=user'}
@@ -241,20 +242,27 @@ export const Navbar: React.FC<NavbarProps> = () => {
               />
             </button>
 
-            {isProfileDropdownOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={() => setIsProfileDropdownOpen(false)}
-                />
-                <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden z-50">
+            <AnimatePresence>
+              {isProfileDropdownOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setIsProfileDropdownOpen(false)}
+                  />
+                  <motion.div
+                    initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                    transition={{ duration: 0.16, ease: 'easeOut' }}
+                    className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden z-50 origin-top-right"
+                  >
                   {/* Profile Header */}
                   <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-100 dark:border-slate-800">
                     <div className="flex items-center gap-3">
                       <img
                         src={user?.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=user'}
                         alt={user?.name || 'User'}
-                        className="w-11 h-11 rounded-full object-cover border-2 border-indigo-500/40 shrink-0"
+                        className="w-11 h-11 rounded-full object-cover border-2 border-emerald-500/40 shrink-0"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-bold text-slate-900 dark:text-white truncate">
@@ -278,9 +286,9 @@ export const Navbar: React.FC<NavbarProps> = () => {
                         setIsProfileDropdownOpen(false);
                         openProfileModal();
                       }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-xl transition-colors"
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-xl transition-colors"
                     >
-                      <User className="w-4 h-4 text-indigo-500" />
+                      <User className="w-4 h-4 text-emerald-500" />
                       <span>Edit My Profile & Avatar</span>
                     </button>
 
@@ -302,13 +310,13 @@ export const Navbar: React.FC<NavbarProps> = () => {
                             setIsProfileDropdownOpen(false);
                             openThemeModal();
                           }}
-                          className="w-full flex items-center justify-between px-3 py-2 text-left text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50/70 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-xl transition-colors mb-1"
+                          className="w-full flex items-center justify-between px-3 py-2 text-left text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50/70 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 rounded-xl transition-colors mb-1"
                         >
                           <div className="flex items-center gap-2.5">
-                            <Palette className="w-4 h-4 text-indigo-500" />
+                            <Palette className="w-4 h-4 text-emerald-500" />
                             <span>Theme & Branding</span>
                           </div>
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider bg-indigo-200/70 dark:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300">
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider bg-emerald-200/70 dark:bg-emerald-900/80 text-emerald-700 dark:text-emerald-300">
                             ADMIN
                           </span>
                         </button>
@@ -381,7 +389,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
                           }}
                           className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/80 rounded-xl transition-colors"
                         >
-                          <HelpCircle className="w-4 h-4 text-indigo-500" />
+                          <HelpCircle className="w-4 h-4 text-emerald-500" />
                           <span>Support Tickets Queue</span>
                         </button>
                         <button
@@ -430,7 +438,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
                             setIsProfileDropdownOpen(false);
                             openCreateModal('support');
                           }}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-xl transition-colors"
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-xl transition-colors"
                         >
                           <HelpCircle className="w-4 h-4" />
                           <span>Submit Support Ticket</span>
@@ -467,7 +475,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
                           }}
                           className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/80 rounded-xl transition-colors"
                         >
-                          <HelpCircle className="w-4 h-4 text-indigo-500" />
+                          <HelpCircle className="w-4 h-4 text-emerald-500" />
                           <span>My Technical Tickets</span>
                         </button>
                       </>
@@ -487,9 +495,10 @@ export const Navbar: React.FC<NavbarProps> = () => {
                       <span>Sign Out</span>
                     </button>
                   </div>
-                </div>
-              </>
-            )}
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </header>

@@ -12,6 +12,10 @@ import { EditProfileModal } from './components/profile/EditProfileModal';
 import { ThemeCustomizationModal } from './components/settings/ThemeCustomizationModal';
 import { HomePage } from './components/home/HomePage';
 import { InvalidSessionModal } from './components/auth/InvalidSessionModal';
+import { PageTransition } from './components/common/PageTransition';
+import { LoadingScreen } from './components/common/LoadingScreen';
+
+import { AnimatePresence } from 'motion/react';
 
 // Pages
 import { DashboardOverview } from './components/dashboard/DashboardOverview';
@@ -25,7 +29,7 @@ import { AuditLogsView } from './components/audit/AuditLogsView';
 import { NotificationLogsView } from './components/notifications/NotificationLogsView';
 import { SettingsView } from './components/settings/SettingsView';
 
-import { ShieldAlert, ArrowLeft, Sparkles, RefreshCw } from 'lucide-react';
+import { ShieldAlert, ArrowLeft } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
   const { currentPage, setCurrentPage, permissions, isPageAllowed } = useApp();
@@ -96,7 +100,9 @@ const MainLayout: React.FC = () => {
         <Navbar />
 
         <main className="flex-1 overflow-y-auto relative">
-          {renderPage()}
+          <AnimatePresence mode="wait">
+            <PageTransition key={currentPage}>{renderPage()}</PageTransition>
+          </AnimatePresence>
         </main>
       </div>
 
@@ -116,19 +122,7 @@ const AppContent: React.FC = () => {
   const { currentView } = useApp();
 
   if (isInitialLoading) {
-    return (
-      <div className="min-h-screen w-screen flex items-center justify-center bg-slate-950 text-white font-sans">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/30 animate-bounce">
-            <Sparkles className="w-6 h-6 text-white" />
-          </div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-            <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-400" />
-            <span>Connecting to Supabase...</span>
-          </div>
-        </div>
-      </div>
-    );
+    return <LoadingScreen label="Connecting to Supabase…" />;
   }
 
   // 1. If currently on public Home Page (no auth needed)
