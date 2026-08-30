@@ -100,6 +100,7 @@ export type Database = {
           bank_name: string | null
           beneficiary_account_name: string | null
           beneficiary_account_number: string | null
+          branch_code: string | null
           browser_info: string | null
           category: string | null
           client_company: string | null
@@ -119,6 +120,7 @@ export type Database = {
           deposit_method: string | null
           description: string | null
           id: string
+          kiosk_id: string | null
           priority: string
           reason: string | null
           remote_id: string | null
@@ -144,6 +146,7 @@ export type Database = {
           bank_name?: string | null
           beneficiary_account_name?: string | null
           beneficiary_account_number?: string | null
+          branch_code?: string | null
           browser_info?: string | null
           category?: string | null
           client_company?: string | null
@@ -163,6 +166,7 @@ export type Database = {
           deposit_method?: string | null
           description?: string | null
           id: string
+          kiosk_id?: string | null
           priority?: string
           reason?: string | null
           remote_id?: string | null
@@ -188,6 +192,7 @@ export type Database = {
           bank_name?: string | null
           beneficiary_account_name?: string | null
           beneficiary_account_number?: string | null
+          branch_code?: string | null
           browser_info?: string | null
           category?: string | null
           client_company?: string | null
@@ -207,6 +212,7 @@ export type Database = {
           deposit_method?: string | null
           description?: string | null
           id?: string
+          kiosk_id?: string | null
           priority?: string
           reason?: string | null
           remote_id?: string | null

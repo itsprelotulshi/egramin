@@ -54,6 +54,7 @@ export const CreateRequestModal: React.FC = () => {
   const [depositMethod, setDepositMethod] = useState<HoldingDepositRequest['depositMethod']>('bank_deposit');
   const [depositTxRef, setDepositTxRef] = useState('');
   const [depositSender, setDepositSender] = useState(user.name);
+  const [kioskId, setKioskId] = useState(user.kioskId || '');
   const [depositDate, setDepositDate] = useState(new Date().toISOString().split('T')[0]);
   const [depositDesc, setDepositDesc] = useState('');
 
@@ -61,13 +62,14 @@ export const CreateRequestModal: React.FC = () => {
   const [withdrawAmount, setWithdrawAmount] = useState<string>('');
   const [withdrawCurrency, setWithdrawCurrency] = useState(user.currency || 'INR');
   const [withdrawMethod, setWithdrawMethod] = useState<HoldingWithdrawRequest['withdrawMethod']>('bank_wire');
-  const [beneficiaryName, setBeneficiaryName] = useState(user.companyName || user.name);
-  const [beneficiaryAccount, setBeneficiaryAccount] = useState(user.account);
-  const [showBeneficiaryAccount, setShowBeneficiaryAccount] = useState(false);
-  const [bankName, setBankName] = useState(user.bank);
-  const [ifscCode, setIfscCode] = useState(user.ifsc);
-  const [withdrawReason, setWithdrawReason] = useState('');
-  const [withdrawDesc, setWithdrawDesc] = useState('');
+  const [beneficiaryName, setBeneficiaryName] = useState<string>(user.companyName || user.name);
+  const [beneficiaryAccount, setBeneficiaryAccount] = useState<string>(user.account);
+  const [showBeneficiaryAccount, setShowBeneficiaryAccount] = useState<boolean>(false);
+  const [bankName, setBankName] = useState<string>('');
+  const [branchCode, setBranchCode] = useState<string>('');
+  const [ifscCode, setIfscCode] = useState<string>(user.ifsc);
+  const [withdrawReason, setWithdrawReason] = useState<string>('');
+  const [withdrawDesc, setWithdrawDesc] = useState<string>('');
 
   // Sync tab if modal opens with initial type
   React.useEffect(() => {
@@ -186,6 +188,8 @@ export const CreateRequestModal: React.FC = () => {
         depositMethod,
         transactionReferenceId: depositTxRef.trim(),
         senderAccountName: depositSender.trim(),
+        kioskId: kioskId.trim(),
+        branchCode: branchCode.trim(),
         depositDate,
         description: depositDesc.trim() || `Deposit update request of ${depositCurrency} ${amt.toLocaleString()} via ${depositMethod.toUpperCase()}`,
         attachments: uploadedAttachments,
@@ -200,6 +204,7 @@ export const CreateRequestModal: React.FC = () => {
         currency: withdrawCurrency,
         withdrawMethod,
         beneficiaryAccountName: beneficiaryName.trim(),
+        kioskId: kioskId.trim(),
         beneficiaryAccountNumberOrAddress: beneficiaryAccount,
         bankNameOrNetwork: bankName.trim(),
         swiftOrIban: ifscCode.trim(),
@@ -404,7 +409,7 @@ export const CreateRequestModal: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-8 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
                   <div className="sm:col-span-4">
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                       Deposit Amount *
@@ -434,21 +439,6 @@ export const CreateRequestModal: React.FC = () => {
 
                   <div className='sm:col-span-2'>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                      Transfer Method
-                    </label>
-                    <select
-                      id="deposit-method-select"
-                      value={depositMethod}
-                      onChange={(e) => setDepositMethod(e.target.value as any)}
-                      className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                    >
-                      <option value="bank_deposit">Bank Deposit</option>
-                      <option value="imps">IMPS</option>
-                      <option value="upi">UPI</option>
-                    </select>
-                  </div>
-                  <div className='sm:col-span-2'>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                       Date Transferred
                     </label>
                     <input
@@ -461,23 +451,71 @@ export const CreateRequestModal: React.FC = () => {
                 </div>
 
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
+                <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
+                  <div className='sm:col-span-2'>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                      Wire Reference # / Txn No *
+                      Transfer Method
+                    </label>
+                    <select
+                      id="deposit-method-select"
+                      value={depositMethod}
+                      onChange={(e) => setDepositMethod(e.target.value as any)}
+                      className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    >
+                      <option value="bank_deposit">Cash Deposit</option>
+                      <option value="imps">IMPS</option>
+                      <option value="upi">UPI</option>
+                    </select>
+                  </div>
+                  {depositMethod === 'upi' || depositMethod === 'imps' && (
+                    <div className='sm:col-span-4'>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Reference # / Txn No *
+                      </label>
+                      <input
+                        id="deposit-tx-ref-input"
+                        type="text"
+                        required
+                        placeholder="Enter transaction number"
+                        value={depositTxRef}
+                        onChange={(e) => setDepositTxRef(e.target.value)}
+                        className="w-full px-3.5 py-2 text-xs sm:text-sm font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                    </div>
+                  )}
+                  {depositMethod === 'bank_deposit' && (
+                    <div className='sm:col-span-4'>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Branch Code *
+                      </label>
+                      <input
+                        id="deposit-branch-code-input"
+                        type="text"
+                        required
+                        placeholder="Enter branch code"
+                        value={branchCode}
+                        onChange={(e) => setBranchCode(e.target.value)}
+                        className="w-full px-3.5 py-2 text-xs sm:text-sm font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className='grid grid-cols-1 sm:grid-cols-6 gap-3'>
+                  <div className='sm:col-span-2'>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                      Kiosk ID
                     </label>
                     <input
-                      id="deposit-tx-ref-input"
+                      id="deposit-kiosk-id-input"
                       type="text"
-                      required
-                      placeholder="Enter transaction number"
-                      value={depositTxRef}
-                      onChange={(e) => setDepositTxRef(e.target.value)}
-                      className="w-full px-3.5 py-2 text-xs sm:text-sm font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      disabled
+                      value={kioskId}
+                      onChange={(e) => setKioskId(e.target.value)}
+                      className="w-full px-3.5 py-2 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                     />
                   </div>
-
-                  <div>
+                  <div className='sm:col-span-4'>
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                       Sender Account / Remitter Name
                     </label>
@@ -552,6 +590,7 @@ export const CreateRequestModal: React.FC = () => {
                     <select
                       id="withdraw-method-select"
                       value={withdrawMethod}
+                      disabled
                       onChange={(e) => setWithdrawMethod(e.target.value as any)}
                       className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:outline-none"
                     >
@@ -656,96 +695,98 @@ export const CreateRequestModal: React.FC = () => {
               </div>
             )}
 
-            {/* File Upload Section (Screenshots, Wire Slips, Invoices) */}
-            <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Attachments & Proofs (Screenshots, PDFs, Receipts)
-                {(activeTab === 'support' || activeTab === 'deposit') && (
-                  <span className="ml-1 text-rose-500 dark:text-rose-400">* Required</span>
+            {/* File Upload Section for support and deposit only(Screenshots, Wire Slips, Invoices) */}
+            {(activeTab === 'support' || activeTab === 'deposit') && (
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Attachments & Proofs (Screenshots, PDFs, Receipts)
+                  {(activeTab === 'support' || activeTab === 'deposit') && (
+                    <span className="ml-1 text-rose-500 dark:text-rose-400">* Required</span>
+                  )}
+                </label>
+
+                {/* Drag & Drop Area */}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleFiles(e.dataTransfer.files);
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-xl p-4 sm:p-5 text-center cursor-pointer bg-slate-50/50 dark:bg-slate-800/40 transition-colors"
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/png,image/jpeg,image/webp,application/pdf"
+                    onChange={(e) => handleFiles(e.target.files)}
+                    className="hidden"
+                  />
+                  <UploadCloud className="w-8 h-8 mx-auto text-slate-400 dark:text-slate-500 mb-1.5" />
+                  <p className="text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-300">
+                    <span className="text-indigo-600 dark:text-indigo-400 font-semibold">Click to upload</span> or drag and drop
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    PNG, JPG, WebP or PDF (max. 10MB per file)
+                  </p>
+                </div>
+
+                {uploadError && (
+                  <div className="flex items-center gap-1.5 text-xs text-rose-600 dark:text-rose-400 mt-2 font-medium">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{uploadError}</span>
+                  </div>
                 )}
-              </label>
 
-              {/* Drag & Drop Area */}
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleFiles(e.dataTransfer.files);
-                }}
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-xl p-4 sm:p-5 text-center cursor-pointer bg-slate-50/50 dark:bg-slate-800/40 transition-colors"
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept="image/png,image/jpeg,image/webp,application/pdf"
-                  onChange={(e) => handleFiles(e.target.files)}
-                  className="hidden"
-                />
-                <UploadCloud className="w-8 h-8 mx-auto text-slate-400 dark:text-slate-500 mb-1.5" />
-                <p className="text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-300">
-                  <span className="text-indigo-600 dark:text-indigo-400 font-semibold">Click to upload</span> or drag and drop
-                </p>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  PNG, JPG, WebP or PDF (max. 10MB per file)
-                </p>
-              </div>
-
-              {uploadError && (
-                <div className="flex items-center gap-1.5 text-xs text-rose-600 dark:text-rose-400 mt-2 font-medium">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{uploadError}</span>
-                </div>
-              )}
-
-              {/* Uploaded Files Preview Grid */}
-              {attachments.length > 0 && (
-                <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                  {attachments.map((file, idx) => (
-                    <div
-                      key={idx}
-                      className="relative group p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex items-center gap-2 overflow-hidden"
-                    >
-                      {file.type.startsWith('image/') ? (
-                        <img
-                          src={file.url}
-                          alt={file.name}
-                          className="w-10 h-10 object-cover rounded bg-slate-100 shrink-0"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                          <FileText className="w-5 h-5" />
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
-                          {file.name}
-                        </p>
-                        <p className="text-[10px] text-slate-400">
-                          {(file.size / 1024).toFixed(0)} KB
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeAttachment(idx);
-                        }}
-                        className="p-1 text-slate-400 hover:text-rose-600 rounded"
-                        title="Remove file"
+                {/* Uploaded Files Preview Grid */}
+                {attachments.length > 0 && (
+                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    {attachments.map((file, idx) => (
+                      <div
+                        key={idx}
+                        className="relative group p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex items-center gap-2 overflow-hidden"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                        {file.type.startsWith('image/') ? (
+                          <img
+                            src={file.url}
+                            alt={file.name}
+                            className="w-10 h-10 object-cover rounded bg-slate-100 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
+                            {file.name}
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            {(file.size / 1024).toFixed(0)} KB
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeAttachment(idx);
+                          }}
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                          title="Remove file"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">

@@ -142,6 +142,7 @@ export function mapDbUser(row: DbUser | any): User {
     account: row.account ? String(row.account) : '',
     ifsc: row.ifsc || '',
     bank: row.bank || '',
+    kioskId: row.kiosk_id || undefined,
     estimatedHoldingBalance: row.estimated_holding_balance ? Number(row.estimated_holding_balance) : 0,
     currency: row.currency || 'INR',
     status: (row.status as User['status']) || 'active',
@@ -162,6 +163,7 @@ export function mapUserToDb(u: User): DbUserInsert {
     account: u.account || null,
     ifsc: u.ifsc || null,
     bank: u.bank || null,
+    kiosk_id: u.kioskId || null,
     estimated_holding_balance: u.estimatedHoldingBalance ?? null,
     currency: u.currency || 'INR',
     status: u.status,
@@ -188,6 +190,8 @@ export function mapDbRequest(row: DbRequest | any): ServiceRequest {
     clientName: row.client_name,
     clientEmail: row.client_email,
     clientCompany: row.client_company || undefined,
+    kioskId: row.kiosk_id || undefined,
+    branchCode: row.branch_code || undefined,
     assignedOperatorId: row.assigned_operator_id || undefined,
     assignedOperatorName: row.assigned_operator_name || undefined,
     createdAt: row.created_at || new Date().toISOString(),
@@ -270,6 +274,7 @@ export function mapRequestToDb(req: ServiceRequest): DbRequestInsert {
     client_name: req.clientName,
     client_email: req.clientEmail,
     client_company: req.clientCompany || null,
+    kiosk_id: (req as any).kioskId || null,
     assigned_operator_id: req.assignedOperatorId || null,
     assigned_operator_name: req.assignedOperatorName || null,
     attachments: (req.attachments || []) as any,
@@ -310,6 +315,7 @@ export function mapRequestToDb(req: ServiceRequest): DbRequestInsert {
     dbReq.deposit_method = dReq.depositMethod;
     dbReq.transaction_reference_id = dReq.transactionReferenceId;
     dbReq.sender_account_name = dReq.senderAccountName || null;
+    dbReq.branch_code = dReq.branchCode || null;
     dbReq.deposit_date = dReq.depositDate;
     dbReq.verified_transaction_id = dReq.verifiedTransactionId || null;
   } else if (req.type === 'withdraw') {

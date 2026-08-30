@@ -93,6 +93,8 @@ interface AppContextType {
     depositMethod: HoldingDepositRequest['depositMethod'];
     transactionReferenceId: string;
     senderAccountName?: string;
+    kioskId?: string;
+    branchCode?: string;
     depositDate: string;
     description: string;
     attachments?: { name: string; size: number; type: string; url: string }[];
@@ -107,6 +109,7 @@ interface AppContextType {
     bankNameOrNetwork?: string;
     swiftOrIban?: string;
     reason?: string;
+    kioskId?: string;
     description: string;
     attachments?: { name: string; size: number; type: string; url: string }[];
   }) => Promise<ServiceRequest>;
@@ -834,6 +837,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     depositMethod: HoldingDepositRequest['depositMethod'];
     transactionReferenceId: string;
     senderAccountName?: string;
+    kioskId?: string;
+    branchCode?: string;
     depositDate: string;
     destinationAccount: string;
     description: string;
@@ -852,6 +857,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       depositMethod: data.depositMethod,
       transactionReferenceId: data.transactionReferenceId,
       senderAccountName: data.senderAccountName || user.name,
+      kioskId: data.kioskId,
+      branchCode: data.branchCode,
       depositDate: data.depositDate,
       title: `Deposit ${data.currency} ${data.amount.toLocaleString()} via ${data.depositMethod.replace('_', ' ').toUpperCase()}`,
       description: data.description,
@@ -925,6 +932,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     bankNameOrNetwork?: string;
     swiftOrIban?: string;
     reason?: string;
+    kioskId?: string;
     description: string;
     attachments?: { name: string; size: number; type: string; url: string }[];
   }): Promise<ServiceRequest> => {
@@ -946,6 +954,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       bankNameOrNetwork: data.bankNameOrNetwork,
       swiftOrIban: data.swiftOrIban,
       reason: data.reason,
+      kioskId: data.kioskId,
       status: 'pending',
       priority: 'high',
       clientId: user.id,

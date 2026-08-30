@@ -599,6 +599,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             account: updatedUser.account,
             ifsc: updatedUser.ifsc,
             bank: updatedUser.bank,
+            kiosk_id: updatedUser.kioskId,
           },
         });
       }

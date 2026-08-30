@@ -773,6 +773,24 @@ export const RequestDetailModal: React.FC = () => {
                       </div>
                     </div>
 
+                    {(req as HoldingDepositRequest).kioskId && (
+                      <div>
+                        <span className="text-slate-400">Kiosk ID</span>
+                        <div className="font-semibold text-slate-800 dark:text-slate-200">
+                          {(req as HoldingDepositRequest).kioskId}
+                        </div>
+                      </div>
+                    )}
+
+                    {(req as HoldingDepositRequest).branchCode && (
+                      <div>
+                        <span className="text-slate-400">Branch Code</span>
+                        <div className="font-semibold text-slate-800 dark:text-slate-200">
+                          {(req as HoldingDepositRequest).branchCode}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="col-span-2">
                       <span className="text-slate-400">Sender Account Name</span>
                       <div className="font-semibold text-slate-900 dark:text-white">
@@ -834,6 +852,15 @@ export const RequestDetailModal: React.FC = () => {
                         {(req as HoldingWithdrawRequest).reason || 'Disbursement'}
                       </div>
                     </div>
+
+                    {(req as HoldingWithdrawRequest).kioskId && (
+                      <div>
+                        <span className="text-slate-400">Kiosk ID</span>
+                        <div className="font-semibold text-slate-800 dark:text-slate-200">
+                          {(req as HoldingWithdrawRequest).kioskId}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="col-span-2">
                       <span className="text-slate-400">Beneficiary Legal Name</span>

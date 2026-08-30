@@ -335,6 +335,7 @@ export const ClientDirectory: React.FC = () => {
                   <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/50 text-slate-400 text-[11px] uppercase tracking-wider font-semibold">
                     <th className="py-3.5 px-4 font-medium">User Profile</th>
                     <th className="py-3.5 px-3 font-medium">Organization</th>
+                    <th className="py-3.5 px-3 font-medium">Kiosk ID</th>
                     <th className="py-3.5 px-3 font-medium">Role</th>
                     <th className="py-3.5 px-3 font-medium">Status</th>
                     <th className="py-3.5 px-3 font-medium">Holding & Balance</th>
@@ -394,6 +395,13 @@ export const ClientDirectory: React.FC = () => {
                         <td className="py-3.5 px-3">
                           <div className="font-medium text-slate-800 dark:text-slate-200 truncate max-w-[160px]">
                             {targetUser.companyName || (targetUser.role === 'admin' ? 'System Administration' : 'Enterprise User')}
+                          </div>
+                        </td>
+
+                        {/* Kiosk ID */}
+                        <td className="py-3.5 px-3">
+                          <div className="font-medium text-slate-600 dark:text-slate-300 truncate max-w-[120px]">
+                            {targetUser.role === 'client' ? (targetUser.kioskId || '—') : '—'}
                           </div>
                         </td>
 

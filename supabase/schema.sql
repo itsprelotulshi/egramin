@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS csmp_users (
   account TEXT,
   ifsc TEXT,
   bank TEXT,
+  kiosk_id TEXT,
   currency TEXT DEFAULT 'INR',
   status TEXT DEFAULT 'active' CHECK (status IN ('active', 'pending', 'suspended')),
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -28,6 +29,7 @@ ALTER TABLE csmp_users ADD COLUMN IF NOT EXISTS auth_user_id UUID;
 ALTER TABLE csmp_users ADD COLUMN IF NOT EXISTS account TEXT;
 ALTER TABLE csmp_users ADD COLUMN IF NOT EXISTS ifsc TEXT;
 ALTER TABLE csmp_users ADD COLUMN IF NOT EXISTS bank TEXT;
+ALTER TABLE csmp_users ADD COLUMN IF NOT EXISTS kiosk_id TEXT;
 ALTER TABLE csmp_users ADD COLUMN IF NOT EXISTS estimated_holding_balance NUMERIC DEFAULT 0;
 
 
@@ -45,7 +47,9 @@ CREATE TABLE IF NOT EXISTS csmp_requests (
   client_email TEXT NOT NULL,
   assigned_operator_id TEXT REFERENCES csmp_users(id) ON DELETE SET NULL,
   assigned_operator_name TEXT,
-  
+  kiosk_id TEXT,
+  branch_code TEXT,
+
   -- Support ticket specific fields
   category TEXT,
   remote_id TEXT,
@@ -83,6 +87,8 @@ CREATE TABLE IF NOT EXISTS csmp_requests (
 ALTER TABLE csmp_requests ADD COLUMN IF NOT EXISTS cma_status JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE csmp_requests ADD COLUMN IF NOT EXISTS authorized_amount NUMERIC;
 ALTER TABLE csmp_requests ADD COLUMN IF NOT EXISTS transfer_receipt_ref TEXT;
+ALTER TABLE csmp_requests ADD COLUMN IF NOT EXISTS kiosk_id TEXT;
+ALTER TABLE csmp_requests ADD COLUMN IF NOT EXISTS branch_code TEXT;
 ALTER TABLE csmp_requests ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
 
 -- Client company and soft-delete tracking columns (used by application layer)

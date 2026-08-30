@@ -92,6 +92,7 @@ export type UserStatus = 'active' | 'pending' | 'suspended';
 export interface User {
   id: string;
   authUserId?: string;
+  kioskId?: string;
   name: string;
   email: string;
   role: UserRole;
@@ -183,6 +184,8 @@ export interface HoldingDepositRequest extends BaseRequest {
   depositMethod: DepositMethod;
   transactionReferenceId: string; // Proof tx id or bank ref
   senderAccountName?: string;
+  kioskId?: string;
+  branchCode?: string;
   depositDate: string;
   destinationAccount?: string;
   verifiedTransactionId?: string; // Operator confirmation ref
@@ -213,6 +216,7 @@ export interface HoldingWithdrawRequest extends BaseRequest {
   bankNameOrNetwork?: string;
   swiftOrIban?: string;
   reason?: string;
+  kioskId?: string;
   transferReceiptRef?: string;
   cmaStatus?: CmaStatus;
   authorizedAmount?: number;

@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Sparkles,
   ShieldCheck,
+  Store,
   Eye,
   EyeOff,
   Lock
@@ -44,6 +45,7 @@ export const EditProfileModal: React.FC = () => {
   const [bankName, setBankName] = useState('');
   const [bankCode, setBankCode] = useState('');
   const [currency, setCurrency] = useState('INR');
+  const [kioskId, setKioskId] = useState('');
   const [showAccountNo, setShowAccountNo] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState('');
   const [isCustomAvatar, setIsCustomAvatar] = useState(false);
@@ -58,6 +60,7 @@ export const EditProfileModal: React.FC = () => {
       setBankName(user.bank || '');
       setBankCode(user.ifsc || '');
       setCurrency(user.currency || 'INR');
+      setKioskId(user.kioskId || '');
       setAvatarUrl(user.avatarUrl || '');
       setIsCustomAvatar(!AVATAR_PRESETS.includes(user.avatarUrl));
     }
@@ -81,6 +84,7 @@ export const EditProfileModal: React.FC = () => {
         account: accountNo.trim() || undefined,
         bank: bankName.trim() || undefined,
         ifsc: bankCode.trim() || undefined,
+        kioskId: kioskId.trim() || undefined,
         currency,
         avatarUrl: avatarUrl.trim() || user.avatarUrl,
       });
@@ -333,6 +337,21 @@ export const EditProfileModal: React.FC = () => {
                           value={bankName}
                           onChange={(e) => setBankName(e.target.value)}
                           placeholder="HLD-US-882910"
+                          className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Kiosk ID
+                      </label>
+                      <div className="relative">
+                        <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                          type="text"
+                          value={kioskId}
+                          onChange={(e) => setKioskId(e.target.value)}
+                          placeholder="e.g. KIOSK-091"
                           className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                         />
                       </div>
