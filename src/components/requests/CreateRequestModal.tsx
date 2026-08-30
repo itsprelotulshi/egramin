@@ -54,7 +54,7 @@ export const CreateRequestModal: React.FC = () => {
   const [depositMethod, setDepositMethod] = useState<HoldingDepositRequest['depositMethod']>('bank_deposit');
   const [depositTxRef, setDepositTxRef] = useState('');
   const [depositSender, setDepositSender] = useState(user.name);
-  const [kioskId, setKioskId] = useState(user.kioskId || '');
+  const [kioskId, setKioskId] = useState(user.kioskId);
   const [depositDate, setDepositDate] = useState(new Date().toISOString().split('T')[0]);
   const [depositDesc, setDepositDesc] = useState('');
 
@@ -129,6 +129,7 @@ export const CreateRequestModal: React.FC = () => {
     setBeneficiaryAccount(user.account);
     setBankName(user.bank);
     setIfscCode(user.ifsc);
+    setKioskId(user.kioskId);
     setWithdrawDesc('');
     setAttachments([]);
     setUploadError(null);
@@ -467,7 +468,7 @@ export const CreateRequestModal: React.FC = () => {
                       <option value="upi">UPI</option>
                     </select>
                   </div>
-                  {depositMethod === 'upi' || depositMethod === 'imps' && (
+                  {(depositMethod === 'upi' || depositMethod === 'imps') && (
                     <div className='sm:col-span-4'>
                       <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                         Reference # / Txn No *
