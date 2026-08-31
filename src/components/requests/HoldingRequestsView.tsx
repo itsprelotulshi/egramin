@@ -60,8 +60,11 @@ export const HoldingRequestsView: React.FC = () => {
         r.ticketNumber.toLowerCase().includes(q) ||
         r.clientName.toLowerCase().includes(q) ||
         r.title.toLowerCase().includes(q) ||
-        (r.type === 'deposit' && (r as HoldingDepositRequest).transactionReferenceId.toLowerCase().includes(q)) ||
-        (r.type === 'withdraw' && (r as HoldingWithdrawRequest).beneficiaryAccountNumberOrAddress.toLowerCase().includes(q))
+        (r.type === 'deposit' && (
+          ((r as HoldingDepositRequest).transactionReferenceId || '').toLowerCase().includes(q) ||
+          ((r as HoldingDepositRequest).branchCode || '').toLowerCase().includes(q)
+        )) ||
+        (r.type === 'withdraw' && ((r as HoldingWithdrawRequest).beneficiaryAccountNumberOrAddress || '').toLowerCase().includes(q))
       );
     });
 
@@ -272,12 +275,24 @@ export const HoldingRequestsView: React.FC = () => {
                         <>
                           <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
                             <span className="text-slate-400">Method:</span>
-                            <span className="font-semibold capitalize">{dep.depositMethod?.replace('_', ' ')}</span>
+                            <span className="font-semibold capitalize">
+                              {dep.depositMethod === 'bank_deposit' ? 'Cash Deposit' : dep.depositMethod?.replace('_', ' ').toUpperCase()}
+                            </span>
                           </div>
-                          <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
-                            <span className="text-slate-400">Wire Ref / TxID:</span>
-                            <span className="font-mono font-medium truncate max-w-45">{dep.transactionReferenceId}</span>
-                          </div>
+                          {dep.branchCode && (
+                            <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
+                              <span className="text-slate-400">Branch Code:</span>
+                              <span className="font-mono font-medium truncate max-w-45">{dep.branchCode}</span>
+                            </div>
+                          )}
+                          {dep.transactionReferenceId && (
+                            <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
+                              <span className="text-slate-400">
+                                {dep.depositMethod === 'bank_deposit' ? 'Ref No:' : 'Txn / UTR:'}
+                              </span>
+                              <span className="font-mono font-medium truncate max-w-45">{dep.transactionReferenceId}</span>
+                            </div>
+                          )}
                           {dep.depositDate && (
                             <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
                               <span className="text-slate-400">Deposit Date:</span>

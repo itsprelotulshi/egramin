@@ -73,10 +73,19 @@ export const CreateRequestModal: React.FC = () => {
   const [withdrawReason, setWithdrawReason] = useState<string>('');
   const [withdrawDesc, setWithdrawDesc] = useState<string>('');
 
-  // Sync tab if modal opens with initial type
+  // Sync form states with user profile and modal open
   React.useEffect(() => {
     if (initialCreateType) setActiveTab(initialCreateType);
-  }, [initialCreateType, isCreateModalOpen]);
+    if (user && isCreateModalOpen) {
+      setDepositSender(user.name || '');
+      setKioskId(user.kioskId || '');
+      setBeneficiaryName(user.companyName || user.name || '');
+      setBeneficiaryAccount(user.account || '');
+      setBankName(user.bank || '');
+      setBranchCode(user.ifsc || '');
+      setIfscCode(user.ifsc || '');
+    }
+  }, [initialCreateType, isCreateModalOpen, user]);
 
   if (!isCreateModalOpen) return null;
 
@@ -131,9 +140,12 @@ export const CreateRequestModal: React.FC = () => {
     setDepositBranchCode('');
     setDepositDesc('');
     setWithdrawAmount('');
-    setBeneficiaryAccount(user.account);
-    setBankName(user.bank);
-    setIfscCode(user.ifsc);
+    setKioskId(user.kioskId || '');
+    setBeneficiaryName(user.companyName || user.name || '');
+    setBeneficiaryAccount(user.account || '');
+    setBankName(user.bank || '');
+    setIfscCode(user.ifsc || '');
+    setWithdrawReason('');
     setWithdrawDesc('');
     setAttachments([]);
     setUploadError(null);
@@ -208,15 +220,15 @@ export const CreateRequestModal: React.FC = () => {
           return;
         }
 
-        const txRef = depositMethod === 'bank_deposit'
-          ? (depositTxRef.trim() || `DEP-${depositBranchCode.trim()}-${Date.now().toString().slice(-4)}`)
-          : depositTxRef.trim();
+        // const txRef = depositMethod === 'bank_deposit'
+        //   ? (depositTxRef.trim() || `DEP-${depositBranchCode.trim()}-${Date.now().toString().slice(-4)}`)
+        //   : depositTxRef.trim();
 
         const newReq = await createHoldingDeposit({
           amount: amt,
           currency: depositCurrency,
           depositMethod,
-          transactionReferenceId: txRef,
+          transactionReferenceId: depositTxRef,
           senderAccountName: depositSender.trim() || user.name,
           kioskId: kioskId.trim() || user.kioskId,
           branchCode: depositBranchCode.trim(),
@@ -600,8 +612,8 @@ export const CreateRequestModal: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="sm:col-span-2">
+                <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
+                  <div className="sm:col-span-4">
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                       Withdrawal Amount *
                     </label>
@@ -628,14 +640,13 @@ export const CreateRequestModal: React.FC = () => {
                     </div>
                   </div>
 
-                  <div>
+                  <div className="sm:col-span-2">
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                       Payout Method
                     </label>
                     <select
                       id="withdraw-method-select"
                       value={withdrawMethod}
-                      disabled
                       onChange={(e) => setWithdrawMethod(e.target.value as any)}
                       className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:outline-none"
                     >
@@ -646,26 +657,68 @@ export const CreateRequestModal: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
+                <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
+                  <div className="sm:col-span-2">
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                      Beneficiary Name *
+                      Kiosk ID
+                    </label>
+                    <input
+                      id="withdraw-kiosk-id-input"
+                      type="text"
+                      placeholder="e.g. KIOSK-091"
+                      value={kioskId}
+                      onChange={(e) => setKioskId(e.target.value)}
+                      className="w-full px-3.5 py-2 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:outline-none font-mono"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-4">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                      Beneficiary Legal Name *
                     </label>
                     <input
                       id="beneficiary-name-input"
                       type="text"
                       required
-                      disabled
+                      placeholder="Beneficiary Account Name"
                       value={beneficiaryName}
                       onChange={(e) => setBeneficiaryName(e.target.value)}
                       className="w-full px-3.5 py-2 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                      Bank Name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. State Bank of India"
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                      className="w-full px-3.5 py-2 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                      IFSC Code
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. SBIN0001234"
+                      value={ifscCode}
+                      onChange={(e) => setIfscCode(e.target.value.toUpperCase())}
+                      className="w-full px-3.5 py-2 text-xs sm:text-sm font-mono uppercase rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:outline-none"
                     />
                   </div>
 
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        Account Number
+                        Account Number *
                       </label>
                       <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
                         <Lock className="w-2.5 h-2.5" />
@@ -677,11 +730,10 @@ export const CreateRequestModal: React.FC = () => {
                         id="beneficiary-account-input"
                         type={showBeneficiaryAccount ? 'text' : 'password'}
                         required
-                        disabled
-                        placeholder="e.g. 1234567890..."
+                        placeholder="e.g. 123456789012"
                         value={beneficiaryAccount}
-                        onChange={(e) => setBeneficiaryAccount(e.target.value as any)}
-                        className="w-full pl-3.5 pr-10 py-2 text-xs sm:text-sm font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/80 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:outline-none"
+                        onChange={(e) => setBeneficiaryAccount(e.target.value)}
+                        className="w-full pl-3.5 pr-10 py-2 text-xs sm:text-sm font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:outline-none"
                       />
                       <button
                         type="button"
@@ -695,44 +747,14 @@ export const CreateRequestModal: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                      Bank
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. State Bank of India"
-                      value={bankName}
-                      disabled
-                      onChange={(e) => setBankName(e.target.value)}
-                      className="w-full px-3.5 py-2 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                      IFSC Code
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. BARCGB22"
-                      value={ifscCode}
-                      disabled
-                      onChange={(e) => setIfscCode(e.target.value)}
-                      className="w-full px-3.5 py-2 text-xs sm:text-sm font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                    Description
+                    Description / Purpose
                   </label>
                   <input
                     type="text"
                     value={withdrawReason}
-                    placeholder='Enter any notes or references'
+                    placeholder="Enter purpose or reference notes"
                     onChange={(e) => setWithdrawReason(e.target.value)}
                     className="w-full px-3.5 py-2 text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:outline-none"
                   />

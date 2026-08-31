@@ -840,7 +840,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     kioskId?: string;
     branchCode?: string;
     depositDate: string;
-    destinationAccount: string;
+    destinationAccount?: string;
     description: string;
     attachments?: { name: string; size: number; type: string; url: string }[];
   }): Promise<ServiceRequest> => {

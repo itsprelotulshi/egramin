@@ -57,7 +57,6 @@ export const RequestDetailModal: React.FC = () => {
   const [commentText, setCommentText] = useState('');
   const [isInternalNote, setIsInternalNote] = useState(false);
   const [statusChangeNote, setStatusChangeNote] = useState('');
-  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const [verifiedTxIdInput, setVerifiedTxIdInput] = useState('');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [showThread, setShowThread] = useState(false);
@@ -115,7 +114,6 @@ export const RequestDetailModal: React.FC = () => {
       req.type === 'deposit' ? verifiedTxIdInput.trim() || undefined : undefined
     );
     setStatusChangeNote('');
-    setIsStatusDropdownOpen(false);
     // Auto-close the detail modal once a request reaches a terminal state
     // (approved/completed or rejected) so the operator lands back on the list.
     if (newStatus === 'completed' || newStatus === 'rejected') {
@@ -769,7 +767,9 @@ export const RequestDetailModal: React.FC = () => {
                     <div>
                       <span className="text-slate-400">Transfer Method</span>
                       <div className="font-semibold text-slate-800 dark:text-slate-200 capitalize">
-                        {(req as HoldingDepositRequest).depositMethod?.replace('_', ' ')}
+                        {(req as HoldingDepositRequest).depositMethod === 'bank_deposit'
+                          ? 'Cash Deposit'
+                          : (req as HoldingDepositRequest).depositMethod?.replace('_', ' ').toUpperCase()}
                       </div>
                     </div>
 
@@ -783,15 +783,26 @@ export const RequestDetailModal: React.FC = () => {
                     <div>
                       <span className="text-slate-400">Kiosk ID</span>
                       <div className="font-semibold text-slate-800 dark:text-slate-200">
-                        {(req as HoldingDepositRequest).kioskId}
+                        {(req as HoldingDepositRequest).kioskId || 'N/A'}
                       </div>
                     </div>
 
-                    {(req as HoldingDepositRequest).branchCode && (
+                    {((req as HoldingDepositRequest).branchCode || (req as HoldingDepositRequest).depositMethod === 'bank_deposit') && (
                       <div>
                         <span className="text-slate-400">Branch Code</span>
-                        <div className="font-semibold text-slate-800 dark:text-slate-200">
-                          {(req as HoldingDepositRequest).branchCode}
+                        <div className="font-semibold font-mono text-slate-800 dark:text-slate-200">
+                          {(req as HoldingDepositRequest).branchCode || 'N/A'}
+                        </div>
+                      </div>
+                    )}
+
+                    {((req as HoldingDepositRequest).depositMethod === 'imps') && (
+                      <div>
+                        <span className="text-slate-400">
+                          Reference Number
+                        </span>
+                        <div className="font-mono font-bold text-slate-900 dark:text-white break-all">
+                          {(req as HoldingDepositRequest).transactionReferenceId || 'N/A'}
                         </div>
                       </div>
                     )}
@@ -803,15 +814,8 @@ export const RequestDetailModal: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="col-span-3">
-                      <span className="text-slate-400">Transaction Ref / Hash</span>
-                      <div className="font-mono font-bold text-slate-900 dark:text-white break-all">
-                        {(req as HoldingDepositRequest).transactionReferenceId}
-                      </div>
-                    </div>
-
                     {(req as HoldingDepositRequest).verifiedTransactionId && (
-                      <div className="col-span-3 p-2 rounded bg-emerald-100/70 dark:bg-emerald-900/50 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5 font-mono">
+                      <div className="col-span-2 sm:col-span-3 p-2 rounded bg-emerald-100/70 dark:bg-emerald-900/50 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5 font-mono">
                         <FileCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                         <span>Confirmed Ledger Tx: {(req as HoldingDepositRequest).verifiedTransactionId}</span>
                       </div>
@@ -858,33 +862,38 @@ export const RequestDetailModal: React.FC = () => {
                       </div>
                     </div>
 
-                    {(req as HoldingWithdrawRequest).kioskId && (
-                      <div>
-                        <span className="text-slate-400">Kiosk ID</span>
-                        <div className="font-semibold text-slate-800 dark:text-slate-200">
-                          {(req as HoldingWithdrawRequest).kioskId}
-                        </div>
-                      </div>
-                    )}
-
                     <div>
-                      <span className="text-slate-400">Beneficiary Legal Name</span>
-                      <div className="font-semibold text-slate-900 dark:text-white">
-                        {(req as HoldingWithdrawRequest).beneficiaryAccountName}
+                      <span className="text-slate-400">Kiosk ID</span>
+                      <div className="font-semibold text-slate-800 dark:text-slate-200">
+                        {(req as HoldingWithdrawRequest).kioskId || 'N/A'}
                       </div>
                     </div>
 
                     <div>
-                      <span className="text-slate-400">Bank / Network</span>
+                      <span className="text-slate-400">Beneficiary Legal Name</span>
+                      <div className="font-semibold text-slate-900 dark:text-white">
+                        {(req as HoldingWithdrawRequest).beneficiaryAccountName || 'N/A'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-slate-400">Bank Name</span>
                       <div className="font-medium text-slate-800 dark:text-slate-200">
                         {(req as HoldingWithdrawRequest).bankNameOrNetwork || 'N/A'}
                       </div>
                     </div>
 
                     <div>
+                      <span className="text-slate-400">IFSC Code</span>
+                      <div className="font-mono font-medium text-slate-800 dark:text-slate-200 uppercase">
+                        {(req as HoldingWithdrawRequest).swiftOrIban || 'N/A'}
+                      </div>
+                    </div>
+
+                    <div>
                       <span className="text-slate-400">Beneficiary Account</span>
                       <div className="font-mono font-bold text-slate-900 dark:text-white break-all">
-                        {(req as HoldingWithdrawRequest).beneficiaryAccountNumberOrAddress}
+                        {(req as HoldingWithdrawRequest).beneficiaryAccountNumberOrAddress || 'N/A'}
                       </div>
                     </div>
                   </div>
