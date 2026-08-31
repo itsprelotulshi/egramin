@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User, UserRole } from '../types';
 import { getStoredUsers, saveUsers, logAuditEvent, clearSensitiveStorage } from '../lib/storage';
-import { fetchUsersFromSupabase, supabase, mapUserToDb, deleteUserFromSupabase, saveAuditLogToSupabase } from '../lib/supabase';
+import { fetchUsersFromSupabase, supabase, saveUserToSupabase, deleteUserFromSupabase, saveAuditLogToSupabase } from '../lib/supabase';
 import { Session, User as SupabaseAuthUser } from '@supabase/supabase-js';
 
 export type AuthModalMode = 'signin' | 'signup' | 'magic' | 'reset';
@@ -245,7 +245,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       try {
-        await supabase.from('csmp_users').upsert(mapUserToDb(newUser), { onConflict: 'email' });
+        await saveUserToSupabase(newUser);
         await syncUsers();
         setUserState(newUser);
         return;
@@ -422,7 +422,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
         try {
-          await supabase.from('csmp_users').upsert(mapUserToDb(newUser), { onConflict: 'email' });
+          await saveUserToSupabase(newUser);
           await syncUsers();
         } catch (dbErr) {
           console.warn('Could not insert csmp_users row directly:', dbErr);
@@ -589,7 +589,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Sync to Supabase csmp_users and auth metadata
     try {
-      await supabase.from('csmp_users').upsert(mapUserToDb(updatedUser));
+      await saveUserToSupabase(updatedUser);
       if (session) {
         await supabase.auth.updateUser({
           data: {
@@ -632,7 +632,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      await supabase.from('csmp_users').upsert(mapUserToDb(updatedUser));
+      await saveUserToSupabase(updatedUser);
       if (user) {
         logAuditEvent(user, 'ADMIN_APPROVED_USER', 'user', userId, `Admin approved user ${updatedUser.name} (${updatedUser.role.toUpperCase()})`);
       }
@@ -661,7 +661,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      await supabase.from('csmp_users').upsert(mapUserToDb(updatedUser));
+      await saveUserToSupabase(updatedUser);
       if (user) {
         logAuditEvent(user, 'ADMIN_SUSPENDED_USER', 'user', userId, `Admin suspended user ${updatedUser.name}`);
       }
@@ -690,7 +690,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      await supabase.from('csmp_users').upsert(mapUserToDb(updatedUser));
+      await saveUserToSupabase(updatedUser);
       if (user) {
         logAuditEvent(user, 'ADMIN_UPDATED_USER_ROLE', 'user', userId, `Changed role of ${updatedUser.name} to [${newRole.toUpperCase()}]`);
       }

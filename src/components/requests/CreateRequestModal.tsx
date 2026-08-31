@@ -56,7 +56,7 @@ export const CreateRequestModal: React.FC = () => {
   const [depositTxRef, setDepositTxRef] = useState('');
   const [depositBranchCode, setDepositBranchCode] = useState('');
   const [depositSender, setDepositSender] = useState(user.name);
-  const [kioskId, setKioskId] = useState(user.kioskId || '');
+  const [kioskId, setKioskId] = useState(user.kioskId);
   const [depositDate, setDepositDate] = useState(new Date().toISOString().split('T')[0]);
   const [depositDesc, setDepositDesc] = useState('');
 
@@ -139,13 +139,10 @@ export const CreateRequestModal: React.FC = () => {
     setDepositTxRef('');
     setDepositBranchCode('');
     setDepositDesc('');
-    setWithdrawAmount('');
-    setKioskId(user.kioskId || '');
-    setBeneficiaryName(user.companyName || user.name || '');
-    setBeneficiaryAccount(user.account || '');
-    setBankName(user.bank || '');
-    setIfscCode(user.ifsc || '');
-    setWithdrawReason('');
+    setBeneficiaryAccount(user.account);
+    setBankName(user.bank);
+    setIfscCode(user.ifsc);
+    setKioskId(user.kioskId);
     setWithdrawDesc('');
     setAttachments([]);
     setUploadError(null);
