@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS csmp_users (
   account TEXT,
   ifsc TEXT,
   bank TEXT,
+  kiosk_id TEXT,
   currency TEXT DEFAULT 'INR',
   status TEXT DEFAULT 'active' CHECK (status IN ('active', 'pending', 'suspended')),
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -28,6 +29,7 @@ ALTER TABLE csmp_users ADD COLUMN IF NOT EXISTS auth_user_id UUID;
 ALTER TABLE csmp_users ADD COLUMN IF NOT EXISTS account TEXT;
 ALTER TABLE csmp_users ADD COLUMN IF NOT EXISTS ifsc TEXT;
 ALTER TABLE csmp_users ADD COLUMN IF NOT EXISTS bank TEXT;
+ALTER TABLE csmp_users ADD COLUMN IF NOT EXISTS kiosk_id TEXT;
 ALTER TABLE csmp_users ADD COLUMN IF NOT EXISTS estimated_holding_balance NUMERIC DEFAULT 0;
 
 
@@ -45,7 +47,9 @@ CREATE TABLE IF NOT EXISTS csmp_requests (
   client_email TEXT NOT NULL,
   assigned_operator_id TEXT REFERENCES csmp_users(id) ON DELETE SET NULL,
   assigned_operator_name TEXT,
-  
+  kiosk_id TEXT,
+  branch_code TEXT,
+
   -- Support ticket specific fields
   category TEXT,
   remote_id TEXT,
@@ -83,6 +87,8 @@ CREATE TABLE IF NOT EXISTS csmp_requests (
 ALTER TABLE csmp_requests ADD COLUMN IF NOT EXISTS cma_status JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE csmp_requests ADD COLUMN IF NOT EXISTS authorized_amount NUMERIC;
 ALTER TABLE csmp_requests ADD COLUMN IF NOT EXISTS transfer_receipt_ref TEXT;
+ALTER TABLE csmp_requests ADD COLUMN IF NOT EXISTS kiosk_id TEXT;
+ALTER TABLE csmp_requests ADD COLUMN IF NOT EXISTS branch_code TEXT;
 ALTER TABLE csmp_requests ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
 
 -- Client company and soft-delete tracking columns (used by application layer)
@@ -313,10 +319,10 @@ CREATE POLICY "csmp_notifications_select_policy" ON csmp_notifications
     -- No anon access
   );
 
--- Any authenticated user can insert notifications (needed to dispatch cross-user alerts)
+-- Any user (authenticated, service_role, or anon guest) can insert notifications (needed to dispatch alerts)
 CREATE POLICY "csmp_notifications_insert_policy" ON csmp_notifications
   FOR INSERT WITH CHECK (
-    auth.role() IN ('authenticated', 'service_role')
+    auth.role() IN ('authenticated', 'service_role', 'anon')
   );
 
 -- Users can mark their own notifications read; admins can update any
@@ -477,4 +483,32 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN NULL;
   END;
 END $$;
+
+-- -------------------------------------------------------------
+-- STORAGE: Request attachments bucket
+-- -------------------------------------------------------------
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('csmp-attachments', 'csmp-attachments', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Authenticated users can upload files; anyone (incl. anon with public URL) can read
+DROP POLICY IF EXISTS "csmp-attachments-public-read" ON storage.objects;
+CREATE POLICY "csmp-attachments-public-read" ON storage.objects
+  FOR SELECT USING (bucket_id = 'csmp-attachments');
+
+DROP POLICY IF EXISTS "csmp-attachments-auth-insert" ON storage.objects;
+CREATE POLICY "csmp-attachments-auth-insert" ON storage.objects
+  FOR INSERT WITH CHECK (
+    bucket_id = 'csmp-attachments'
+    AND (auth.role() IN ('authenticated', 'service_role'))
+  );
+
+-- Allow creators to delete their own uploads
+DROP POLICY IF EXISTS "csmp-attachments-auth-delete" ON storage.objects;
+CREATE POLICY "csmp-attachments-auth-delete" ON storage.objects
+  FOR DELETE USING (
+    bucket_id = 'csmp-attachments'
+    AND (auth.role() IN ('authenticated', 'service_role'))
+    AND (storage.foldername(name))[1] = auth.uid()::text
+  );
 

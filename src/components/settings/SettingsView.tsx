@@ -162,6 +162,32 @@ export const SettingsView: React.FC = () => {
                 <span className="text-slate-400">Company:</span>
                 <span className="text-slate-700 dark:text-slate-300 font-medium">{user?.companyName || 'Platform Operations'}</span>
               </div>
+              {user?.bank && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Bank Name:</span>
+                  <span className="text-slate-700 dark:text-slate-300 font-medium">{user.bank}</span>
+                </div>
+              )}
+              {user?.ifsc && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">IFSC Code:</span>
+                  <span className="font-mono text-slate-700 dark:text-slate-300 font-medium">{user.ifsc}</span>
+                </div>
+              )}
+              {user?.account && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Account No:</span>
+                  <span className="font-mono text-slate-700 dark:text-slate-300 font-medium">
+                    ••••{user.account.slice(-4)}
+                  </span>
+                </div>
+              )}
+              {user?.kioskId && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Kiosk ID:</span>
+                  <span className="font-mono text-slate-700 dark:text-slate-300 font-medium">{user.kioskId}</span>
+                </div>
+              )}
             </div>
 
             <button

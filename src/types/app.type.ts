@@ -1,14 +1,26 @@
-import type { Database, Json } from './supabase.types';
+import type {
+  Database,
+  Json,
+  Tables,
+  TablesInsert,
+  TablesUpdate,
+  Enums,
+  CompositeTypes,
+} from './supabase.types';
 
 // ============================================================================
 // SUPABASE DATABASE TYPE ALIASES & HELPERS
 // ============================================================================
 
-export type { Database, Json };
-
-export type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row'];
-export type TablesInsert<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Insert'];
-export type TablesUpdate<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Update'];
+export type {
+  Database,
+  Json,
+  Tables,
+  TablesInsert,
+  TablesUpdate,
+  Enums,
+  CompositeTypes,
+};
 
 // Database Row Types (snake_case directly from Supabase schema)
 export type DbUser = Tables<'csmp_users'>;
@@ -86,12 +98,13 @@ export function getPageMetadata(pageId: string): PageMetadata {
 export type UserStatus = 'active' | 'pending' | 'suspended';
 
 // ============================================================================
-// APP DOMAIN USER MODEL
+// APP DOMAIN USER MODEL (DERIVED DIRECTLY FROM SUPABASE CSMP_USERS)
 // ============================================================================
 
-export interface User {
+export interface User extends Partial<DbUser> {
   id: string;
   authUserId?: string;
+  kioskId?: string;
   name: string;
   email: string;
   role: UserRole;
@@ -100,7 +113,7 @@ export interface User {
   phoneNumber?: string;
   currency?: string;
   status: UserStatus;
-  createdAt: string;
+  createdAt?: string;
   account?: string;
   ifsc?: string;
   bank?: string;
@@ -109,7 +122,7 @@ export interface User {
 }
 
 // ============================================================================
-// SERVICE REQUESTS & TICKETS
+// SERVICE REQUESTS & TICKETS (DERIVED DIRECTLY FROM SUPABASE CSMP_REQUESTS)
 // ============================================================================
 
 export type RequestType = 'support' | 'deposit' | 'withdraw';
@@ -138,30 +151,30 @@ export interface Comment {
   attachments?: Attachment[];
 }
 
-export interface BaseRequest {
+export interface BaseRequest extends Partial<Omit<DbRequest, 'attachments' | 'comments'>> {
   id: string;
-  ticketNumber: string; // e.g. TCK-2026-001 or HLD-2026-042
+  ticketNumber?: string; // e.g. TCK-2026-001 or HLD-2026-042
   type: RequestType;
   title: string;
-  description: string;
+  description?: string;
   status: RequestStatus;
   priority: RequestPriority;
-  clientId: string;
-  clientName: string;
-  clientEmail: string;
+  clientId?: string;
+  clientName?: string;
+  clientEmail?: string;
   clientCompany?: string;
   assignedOperatorId?: string;
   assignedOperatorName?: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
   resolvedAt?: string;
   deleteRequested?: boolean;
   deleteRequestedBy?: string;
   deleteRequestedById?: string;
   deleteRequestedReason?: string;
   deleteRequestedAt?: string;
-  comments: Comment[];
-  attachments: Attachment[];
+  comments?: Comment[];
+  attachments?: Attachment[];
 }
 
 export type SupportCategory = 'matm' | 'morpho' | 'passbook_printer' | 'new_setup' | 'upgrade_services';
@@ -183,6 +196,8 @@ export interface HoldingDepositRequest extends BaseRequest {
   depositMethod: DepositMethod;
   transactionReferenceId: string; // Proof tx id or bank ref
   senderAccountName?: string;
+  kioskId?: string;
+  branchCode?: string;
   depositDate: string;
   destinationAccount?: string;
   verifiedTransactionId?: string; // Operator confirmation ref
@@ -213,6 +228,7 @@ export interface HoldingWithdrawRequest extends BaseRequest {
   bankNameOrNetwork?: string;
   swiftOrIban?: string;
   reason?: string;
+  kioskId?: string;
   transferReceiptRef?: string;
   cmaStatus?: CmaStatus;
   authorizedAmount?: number;
@@ -221,10 +237,10 @@ export interface HoldingWithdrawRequest extends BaseRequest {
 export type ServiceRequest = SupportTicket | HoldingDepositRequest | HoldingWithdrawRequest;
 
 // ============================================================================
-// RBAC & PERMISSIONS
+// RBAC & PERMISSIONS (DERIVED DIRECTLY FROM SUPABASE CSMP_ROLE_PERMISSIONS)
 // ============================================================================
 
-export interface RolePermissions {
+export interface RolePermissions extends Partial<Omit<DbRolePermission, 'allowed_pages'>> {
   role: UserRole;
   allowedPages: PageId[];
   canCreateRequest: boolean;
@@ -238,13 +254,13 @@ export interface RolePermissions {
 }
 
 // ============================================================================
-// NOTIFICATIONS & AUDIT TRAIL
+// NOTIFICATIONS & AUDIT TRAIL (DERIVED DIRECTLY FROM SUPABASE SCHEMAS)
 // ============================================================================
 
 export type NotificationType = 'info' | 'success' | 'warning' | 'error';
 export type NotificationCategory = 'request_update' | 'assignment' | 'new_request' | 'system' | 'mention';
 
-export interface Notification {
+export interface Notification extends Partial<DbNotification> {
   id: string;
   userId: string; // Target user ID or 'all' | 'all_staff' | 'all_operators' | 'all_admins'
   title: string;
@@ -258,7 +274,7 @@ export interface Notification {
 
 export type AuditTargetType = 'request' | 'user' | 'rbac' | 'system';
 
-export interface AuditLog {
+export interface AuditLog extends Partial<DbAuditLog> {
   id: string;
   actorId: string;
   actorName: string;

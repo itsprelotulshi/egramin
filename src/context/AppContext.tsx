@@ -41,9 +41,11 @@ import {
   markAllNotificationsReadInSupabase,
   fetchAuditLogsFromSupabase,
   saveAuditLogToSupabase,
-  mapDbNotification,
-  mapDbRequest,
-  checkSupabaseHealth
+  checkSupabaseHealth,
+  generateRequestId,
+  generateTicketNumber,
+  queueRequestForRetry,
+  flushPendingRequestSync,
 } from '../lib/supabase';
 import { ThemeConfig, getStoredTheme, applyTheme, DEFAULT_THEME } from '../lib/theme';
 import { useAuth } from './AuthContext';
@@ -81,7 +83,7 @@ interface AppContextType {
     remoteId?: string;
     browserInfo?: string;
     attachments?: { name: string; size: number; type: string; url: string }[];
-  }) => ServiceRequest;
+  }) => Promise<ServiceRequest>;
 
   createHoldingDeposit: (data: {
     amount: number;
@@ -89,10 +91,12 @@ interface AppContextType {
     depositMethod: HoldingDepositRequest['depositMethod'];
     transactionReferenceId: string;
     senderAccountName?: string;
+    kioskId?: string;
+    branchCode?: string;
     depositDate: string;
     description: string;
     attachments?: { name: string; size: number; type: string; url: string }[];
-  }) => ServiceRequest;
+  }) => Promise<ServiceRequest>;
 
   createHoldingWithdraw: (data: {
     amount: number;
@@ -103,9 +107,10 @@ interface AppContextType {
     bankNameOrNetwork?: string;
     swiftOrIban?: string;
     reason?: string;
+    kioskId?: string;
     description: string;
     attachments?: { name: string; size: number; type: string; url: string }[];
-  }) => ServiceRequest;
+  }) => Promise<ServiceRequest>;
 
   updateRequestStatus: (
     requestId: string,
@@ -514,7 +519,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .on('postgres_changes', { event: '*', schema: 'public', table: 'csmp_requests' }, (payload: any) => {
         if (payload.new) {
           try {
-            const updatedReq = mapDbRequest(payload.new);
+            const updatedReq = payload.new as ServiceRequest;
             setRequests(prev => {
               const exists = prev.some(r => r.id === updatedReq.id);
               const updated = exists ? prev.map(r => r.id === updatedReq.id ? updatedReq : r) : [updatedReq, ...prev];
@@ -527,16 +532,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           } catch {
             fetchRequestsFromSupabase().then(dbReqs => {
               if (dbReqs) {
-                setRequests(dbReqs);
-                saveRequests(dbReqs);
+                setRequests(dbReqs as any);
+                saveRequests(dbReqs as any);
               }
             }).catch(() => { });
           }
         } else {
           fetchRequestsFromSupabase().then(dbReqs => {
             if (dbReqs) {
-              setRequests(dbReqs);
-              saveRequests(dbReqs);
+              setRequests(dbReqs as any);
+              saveRequests(dbReqs as any);
             }
           }).catch(() => { });
         }
@@ -544,7 +549,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .on('postgres_changes', { event: '*', schema: 'public', table: 'csmp_notifications' }, (payload: any) => {
         if (payload.new) {
           try {
-            const newNotif = mapDbNotification(payload.new);
+            const newNotif = payload.new as Notification;
             setNotifications(prev => {
               const exists = prev.some(n => n.id === newNotif.id);
               const updated = exists ? prev.map(n => n.id === newNotif.id ? newNotif : n) : [newNotif, ...prev];
@@ -606,6 +611,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           saveRequests(dbReqs);
         }
       }).catch(() => { });
+
+      // Retry any requests whose Supabase write failed earlier
+      flushPendingRequestSync().catch(() => { });
     }, 4000);
 
     return () => {
@@ -737,7 +745,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Create Support Ticket
-  const createSupportTicket = (data: {
+  const createSupportTicket = async (data: {
     title: string;
     description: string;
     category?: SupportTicket['category'];
@@ -746,13 +754,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     environment?: string;
     browserInfo?: string;
     attachments?: { name: string; size: number; type: string; url: string }[];
-  }): ServiceRequest => {
+  }): Promise<ServiceRequest> => {
     const now = new Date().toISOString();
-    const count = requests.filter(r => r.type === 'support').length + 101;
-    const ticketNumber = `TCK-${new Date().getFullYear()}-${count}`;
+    const count = requests.filter(r => r.type === 'support').length;
+    const ticketNumber = generateTicketNumber('support', count);
 
     const newTicket: SupportTicket = {
-      id: `req_${Date.now()}`,
+      id: generateRequestId('req'),
       ticketNumber,
       type: 'support',
       title: data.title,
@@ -784,10 +792,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setRequests(updated);
     saveRequests(updated);
 
-    // Persist to Supabase
-    saveRequestToSupabase(newTicket).catch(err => {
-      console.warn('Supabase save request warning:', err.message);
-    });
+    // Persist to Supabase — only report success once the row is actually saved.
+    try {
+      await saveRequestToSupabase(newTicket);
+    } catch (err: any) {
+      console.warn('Request not persisted to Supabase:', err.message);
+      queueRequestForRetry(newTicket);
+      toast(`Saved locally — will retry syncing "${ticketNumber}".`, 'warning');
+      return newTicket;
+    }
 
     recordAudit('CREATED_SUPPORT_TICKET', 'request', newTicket.id, `Ticket ${ticketNumber}: ${data.title} (${data.priority.toUpperCase()})`);
 
@@ -816,23 +829,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Create Holding Deposit Request
-  const createHoldingDeposit = (data: {
+  const createHoldingDeposit = async (data: {
     amount: number;
     currency: string;
     depositMethod: HoldingDepositRequest['depositMethod'];
     transactionReferenceId: string;
     senderAccountName?: string;
+    kioskId?: string;
+    branchCode?: string;
     depositDate: string;
-    destinationAccount: string;
+    destinationAccount?: string;
     description: string;
     attachments?: { name: string; size: number; type: string; url: string }[];
-  }): ServiceRequest => {
+  }): Promise<ServiceRequest> => {
     const now = new Date().toISOString();
-    const count = requests.filter(r => r.type === 'deposit').length + 201;
-    const ticketNumber = `HLD-${new Date().getFullYear()}-${count}`;
+    const count = requests.filter(r => r.type === 'deposit').length;
+    const ticketNumber = generateTicketNumber('deposit', count);
 
     const newDeposit: HoldingDepositRequest = {
-      id: `req_${Date.now()}`,
+      id: generateRequestId('req'),
       ticketNumber,
       type: 'deposit',
       amount: data.amount,
@@ -840,6 +855,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       depositMethod: data.depositMethod,
       transactionReferenceId: data.transactionReferenceId,
       senderAccountName: data.senderAccountName || user.name,
+      kioskId: data.kioskId,
+      branchCode: data.branchCode,
       depositDate: data.depositDate,
       title: `Deposit ${data.currency} ${data.amount.toLocaleString()} via ${data.depositMethod.replace('_', ' ').toUpperCase()}`,
       description: data.description,
@@ -867,10 +884,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setRequests(updated);
     saveRequests(updated);
 
-    // Persist to Supabase
-    saveRequestToSupabase(newDeposit).catch(err => {
-      console.warn('Supabase save request warning:', err.message);
-    });
+    // Persist to Supabase — only report success once the row is actually saved.
+    try {
+      await saveRequestToSupabase(newDeposit);
+    } catch (err: any) {
+      console.warn('Request not persisted to Supabase:', err.message);
+      queueRequestForRetry(newDeposit);
+      toast(`Saved locally — will retry syncing "${ticketNumber}".`, 'warning');
+      return newDeposit;
+    }
 
     recordAudit('CREATED_DEPOSIT_REQUEST', 'request', newDeposit.id, `Deposit request ${ticketNumber} for ${data.currency} ${data.amount.toLocaleString()}`);
 
@@ -899,7 +921,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Create Holding Withdraw Request
-  const createHoldingWithdraw = (data: {
+  const createHoldingWithdraw = async (data: {
     amount: number;
     currency: string;
     withdrawMethod: HoldingWithdrawRequest['withdrawMethod'];
@@ -908,15 +930,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     bankNameOrNetwork?: string;
     swiftOrIban?: string;
     reason?: string;
+    kioskId?: string;
     description: string;
     attachments?: { name: string; size: number; type: string; url: string }[];
-  }): ServiceRequest => {
+  }): Promise<ServiceRequest> => {
     const now = new Date().toISOString();
-    const count = requests.filter(r => r.type === 'withdraw').length + 301;
-    const ticketNumber = `HLD-${new Date().getFullYear()}-${count}`;
+    const count = requests.filter(r => r.type === 'withdraw').length;
+    const ticketNumber = generateTicketNumber('withdraw', count);
 
     const newWithdraw: HoldingWithdrawRequest = {
-      id: `req_${Date.now()}`,
+      id: generateRequestId('req'),
       ticketNumber,
       type: 'withdraw',
       title: `Withdraw ${data.currency} ${data.amount.toLocaleString()} to ${data.beneficiaryAccountName}`,
@@ -929,6 +952,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       bankNameOrNetwork: data.bankNameOrNetwork,
       swiftOrIban: data.swiftOrIban,
       reason: data.reason,
+      kioskId: data.kioskId,
       status: 'pending',
       priority: 'high',
       clientId: user.id,
@@ -953,10 +977,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setRequests(updated);
     saveRequests(updated);
 
-    // Persist to Supabase
-    saveRequestToSupabase(newWithdraw).catch(err => {
-      console.warn('Supabase save request warning:', err.message);
-    });
+    // Persist to Supabase — only report success once the row is actually saved.
+    try {
+      await saveRequestToSupabase(newWithdraw);
+    } catch (err: any) {
+      console.warn('Request not persisted to Supabase:', err.message);
+      queueRequestForRetry(newWithdraw);
+      toast(`Saved locally — will retry syncing "${ticketNumber}".`, 'warning');
+      return newWithdraw;
+    }
 
     recordAudit('CREATED_WITHDRAWAL_REQUEST', 'request', newWithdraw.id, `Withdrawal request ${ticketNumber} for ${data.currency} ${data.amount.toLocaleString()}`);
 
@@ -984,8 +1013,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newWithdraw;
   };
 
+  // Persist a request to Supabase with honest feedback.
+  // Returns true on success, false on failure (and queues for retry).
+  const persistRequest = async (req: ServiceRequest): Promise<boolean> => {
+    try {
+      await saveRequestToSupabase(req);
+      return true;
+    } catch (err: any) {
+      console.warn('Request DB sync failed:', err.message);
+      queueRequestForRetry(req);
+      return false;
+    }
+  };
+
   // Update Status
-  const updateRequestStatus = (
+  const updateRequestStatus = async (
     requestId: string,
     newStatus: RequestStatus,
     note?: string,
@@ -1044,10 +1086,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (targetReq) {
       setActiveRequest(targetReq);
 
-      // Persist to Supabase
-      saveRequestToSupabase(targetReq).catch((err) => {
-        console.warn('Failed to sync updated request to Supabase:', err);
-      });
+      // Persist to Supabase — only toast success when it actually succeeds.
+      const persisted = await persistRequest(targetReq);
 
       recordAudit(
         'UPDATED_REQUEST_STATUS',
@@ -1115,13 +1155,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // ignore if canvas unavailable
         }
       }
-    }
 
-    toast(`Request status updated to ${newStatus.replace('_', ' ')}`, 'success');
+      // Only show success toast if persistence succeeded
+      if (persisted) {
+        toast(`Request status updated to ${newStatus.replace('_', ' ')}`, 'success');
+      } else {
+        toast('Change saved locally — DB sync pending.', 'warning');
+      }
+    }
   };
 
   // Update Withdrawal CMA Step (Configure, Make, Authorize)
-  const updateWithdrawalCmaStep = (
+  const updateWithdrawalCmaStep = async (
     requestId: string,
     step: 'configure' | 'make' | 'authorize',
     checked: boolean,
@@ -1148,8 +1193,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         [`${step}By`]: checked ? user.name : undefined,
       };
 
+      // The authorized amount is captured at the Configure (C) step and reused
+      // through Authorize (A). Un-checking either clears the recorded amount.
       let finalAuthorizedAmount = withdrawReq.authorizedAmount;
-      if (step === 'authorize') {
+      if (step === 'configure' || step === 'authorize') {
         if (checked) {
           finalAuthorizedAmount = authorizedAmount !== undefined ? authorizedAmount : (currentCma.authorizedAmount || withdrawReq.amount);
           newCma.authorizedAmount = finalAuthorizedAmount;
@@ -1212,9 +1259,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (targetReq) {
       setActiveRequest(targetReq);
-      saveRequestToSupabase(targetReq).catch((err) => {
-        console.warn('Failed to sync CMA update to Supabase:', err);
-      });
+      await persistRequest(targetReq);
 
       recordAudit(
         'UPDATED_WITHDRAWAL_CMA',
@@ -1251,7 +1296,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Assign Operator
-  const assignOperator = (requestId: string, operatorId: string) => {
+  const assignOperator = async (requestId: string, operatorId: string) => {
     const operator = allUsers.find(u => u.id === operatorId);
     if (!operator) return;
 
@@ -1275,8 +1320,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     saveRequests(updated);
 
     if (targetReq) {
-      // Persist to Supabase
-      saveRequestToSupabase(targetReq).catch(() => { });
+      await persistRequest(targetReq);
 
       recordAudit(
         'ASSIGNED_OPERATOR',
@@ -1299,7 +1343,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Add Comment / Message
-  const addComment = (
+  const addComment = async (
     requestId: string,
     content: string,
     isInternal: boolean,
@@ -1345,10 +1389,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (targetReq) {
       setActiveRequest(targetReq);
 
-      // Persist thread history directly to Supabase
-      saveRequestToSupabase(targetReq).catch((err) => {
-        console.warn('Failed to sync comment thread history to Supabase:', err);
-      });
+      await persistRequest(targetReq);
 
       recordAudit(
         isInternal ? 'ADDED_INTERNAL_NOTE' : 'POSTED_COMMENT',
@@ -1402,7 +1443,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Request Deletion (Submits request for admin approval)
-  const requestDeletion = (requestId: string, reason: string) => {
+  const requestDeletion = async (requestId: string, reason: string) => {
     const now = new Date().toISOString();
     let targetReq: ServiceRequest | undefined;
 
@@ -1439,7 +1480,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (targetReq) {
       setActiveRequest(targetReq);
-      saveRequestToSupabase(targetReq).catch(() => { });
+      await persistRequest(targetReq);
       recordAudit(
         'REQUESTED_REQUEST_DELETION',
         'request',
@@ -1481,7 +1522,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Reject Deletion (Admin rejects deletion request)
-  const rejectDeletion = (requestId: string) => {
+  const rejectDeletion = async (requestId: string) => {
     const now = new Date().toISOString();
     const originalReq = requests.find(r => r.id === requestId);
     const requesterId = originalReq?.deleteRequestedById || (originalReq as any)?.delete_requested_by_id;
@@ -1520,7 +1561,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (targetReq) {
       setActiveRequest(targetReq);
-      saveRequestToSupabase(targetReq).catch(() => { });
+      await persistRequest(targetReq);
       recordAudit(
         'REJECTED_REQUEST_DELETION',
         'request',

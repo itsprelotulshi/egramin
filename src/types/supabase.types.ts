@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   auth: {
     Tables: {
@@ -1208,9 +1208,11 @@ export type Database = {
           assigned_operator_name: string | null
           attachments: Json | null
           authorized_amount: number | null
-          bank_name_or_network: string | null
+          bank_ifsc: string | null
+          bank_name: string | null
           beneficiary_account_name: string | null
-          beneficiary_account_number_or_address: string | null
+          beneficiary_account_number: string | null
+          branch_code: string | null
           browser_info: string | null
           category: string | null
           client_company: string | null
@@ -1230,13 +1232,13 @@ export type Database = {
           deposit_method: string | null
           description: string | null
           id: string
+          kiosk_id: string | null
           priority: string
           reason: string | null
           remote_id: string | null
           resolved_at: string | null
           sender_account_name: string | null
           status: string
-          swift_or_iban: string | null
           ticket_number: string
           title: string
           transaction_reference_id: string | null
@@ -1252,9 +1254,11 @@ export type Database = {
           assigned_operator_name?: string | null
           attachments?: Json | null
           authorized_amount?: number | null
-          bank_name_or_network?: string | null
+          bank_ifsc?: string | null
+          bank_name?: string | null
           beneficiary_account_name?: string | null
-          beneficiary_account_number_or_address?: string | null
+          beneficiary_account_number?: string | null
+          branch_code?: string | null
           browser_info?: string | null
           category?: string | null
           client_company?: string | null
@@ -1274,13 +1278,13 @@ export type Database = {
           deposit_method?: string | null
           description?: string | null
           id: string
+          kiosk_id?: string | null
           priority?: string
           reason?: string | null
           remote_id?: string | null
           resolved_at?: string | null
           sender_account_name?: string | null
           status?: string
-          swift_or_iban?: string | null
           ticket_number: string
           title: string
           transaction_reference_id?: string | null
@@ -1296,9 +1300,11 @@ export type Database = {
           assigned_operator_name?: string | null
           attachments?: Json | null
           authorized_amount?: number | null
-          bank_name_or_network?: string | null
+          bank_ifsc?: string | null
+          bank_name?: string | null
           beneficiary_account_name?: string | null
-          beneficiary_account_number_or_address?: string | null
+          beneficiary_account_number?: string | null
+          branch_code?: string | null
           browser_info?: string | null
           category?: string | null
           client_company?: string | null
@@ -1318,13 +1324,13 @@ export type Database = {
           deposit_method?: string | null
           description?: string | null
           id?: string
+          kiosk_id?: string | null
           priority?: string
           reason?: string | null
           remote_id?: string | null
           resolved_at?: string | null
           sender_account_name?: string | null
           status?: string
-          swift_or_iban?: string | null
           ticket_number?: string
           title?: string
           transaction_reference_id?: string | null
@@ -1395,7 +1401,7 @@ export type Database = {
       }
       csmp_users: {
         Row: {
-          account: number | null
+          account: string | null
           auth_user_id: string | null
           avatar_url: string | null
           bank: string | null
@@ -1404,16 +1410,16 @@ export type Database = {
           currency: string | null
           email: string
           estimated_holding_balance: number | null
-          holding_account_id: string | null
           id: string
           ifsc: string | null
+          kiosk_id: string | null
           name: string
           phone_number: string | null
           role: string
           status: string | null
         }
         Insert: {
-          account?: number | null
+          account?: string | null
           auth_user_id?: string | null
           avatar_url?: string | null
           bank?: string | null
@@ -1422,16 +1428,16 @@ export type Database = {
           currency?: string | null
           email: string
           estimated_holding_balance?: number | null
-          holding_account_id?: string | null
           id: string
           ifsc?: string | null
+          kiosk_id?: string | null
           name: string
           phone_number?: string | null
           role: string
           status?: string | null
         }
         Update: {
-          account?: number | null
+          account?: string | null
           auth_user_id?: string | null
           avatar_url?: string | null
           bank?: string | null
@@ -1440,9 +1446,9 @@ export type Database = {
           currency?: string | null
           email?: string
           estimated_holding_balance?: number | null
-          holding_account_id?: string | null
           id?: string
           ifsc?: string | null
+          kiosk_id?: string | null
           name?: string
           phone_number?: string | null
           role?: string
@@ -1457,7 +1463,6 @@ export type Database = {
     Functions: {
       get_auth_role: { Args: never; Returns: string }
       get_auth_user_id: { Args: never; Returns: string }
-      get_current_user_role: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never

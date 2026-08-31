@@ -50,6 +50,8 @@ export const DashboardOverview: React.FC = () => {
   ).slice(0, 5);
 
   const canCreate = user?.role === 'client' && (permissions[user?.role || 'client']?.canCreateRequest ?? true);
+  const isStaff = user.role === 'admin' || user.role === 'operator';
+
 
   return (
     <div id="dashboard-overview-page" className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
@@ -98,29 +100,31 @@ export const DashboardOverview: React.FC = () => {
       </motion.div>
 
       {/* Urgent Alert Banner (if any) */}
-      {urgentCount > 0 && (
-        <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/80 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/60 text-red-600 dark:text-red-300 shrink-0">
-              <AlertTriangle className="w-5 h-5 animate-pulse" />
-            </div>
-            <div>
-              <div className="text-xs sm:text-sm font-bold text-red-900 dark:text-red-200">
-                {urgentCount} Urgent Request{urgentCount > 1 ? 's' : ''} Require Immediate Attention
+      {isStaff && (
+        urgentCount > 0 && (
+          <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/80 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/60 text-red-600 dark:text-red-300 shrink-0">
+                <AlertTriangle className="w-5 h-5 animate-pulse" />
               </div>
-              <p className="text-xs text-red-700 dark:text-red-300/80">
-                High priority technical issues or large holding requests awaiting operator review.
-              </p>
+              <div>
+                <div className="text-xs sm:text-sm font-bold text-red-900 dark:text-red-200">
+                  {urgentCount} Urgent Request{urgentCount > 1 ? 's' : ''} Require Immediate Attention
+                </div>
+                <p className="text-xs text-red-700 dark:text-red-300/80">
+                  High priority technical issues or large holding requests awaiting operator review.
+                </p>
+              </div>
             </div>
+            <button
+              onClick={() => setCurrentPage('all-requests')}
+              className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shrink-0 transition-colors"
+            >
+              View Urgent
+            </button>
           </div>
-          <button
-            onClick={() => setCurrentPage('all-requests')}
-            className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shrink-0 transition-colors"
-          >
-            View Urgent
-          </button>
-        </div>
-      )}
+        ))
+      }
 
       {/* Pending Deletion Approval Banner (Admin Only) */}
       {user.role === 'admin' && pendingDeletionCount > 0 && (

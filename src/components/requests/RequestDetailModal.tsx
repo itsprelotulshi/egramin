@@ -57,11 +57,10 @@ export const RequestDetailModal: React.FC = () => {
   const [commentText, setCommentText] = useState('');
   const [isInternalNote, setIsInternalNote] = useState(false);
   const [statusChangeNote, setStatusChangeNote] = useState('');
-  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const [verifiedTxIdInput, setVerifiedTxIdInput] = useState('');
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [showThread, setShowThread] = useState(false);
-  const [isAuthorizing, setIsAuthorizing] = useState(false);
+  const [isConfiguring, setIsConfiguring] = useState(false);
   const [authorizedAmountInput, setAuthorizedAmountInput] = useState<number | string>('');
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteReasonInput, setDeleteReasonInput] = useState('');
@@ -75,7 +74,6 @@ export const RequestDetailModal: React.FC = () => {
     if (activeRequest && activeRequest.type === 'withdraw') {
       const wReq = activeRequest as HoldingWithdrawRequest;
       setAuthorizedAmountInput(wReq.authorizedAmount || wReq.cmaStatus?.authorizedAmount || wReq.amount || 0);
-      setIsAuthorizing(false);
     }
   }, [activeRequest?.id]);
 
@@ -116,7 +114,11 @@ export const RequestDetailModal: React.FC = () => {
       req.type === 'deposit' ? verifiedTxIdInput.trim() || undefined : undefined
     );
     setStatusChangeNote('');
-    setIsStatusDropdownOpen(false);
+    // Auto-close the detail modal once a request reaches a terminal state
+    // (approved/completed or rejected) so the operator lands back on the list.
+    if (newStatus === 'completed' || newStatus === 'rejected') {
+      setActiveRequest(null);
+    }
   };
 
 
@@ -148,7 +150,13 @@ export const RequestDetailModal: React.FC = () => {
                 {req.ticketNumber}
               </span>
               <TypeBadge type={req.type} />
-              <StatusBadge status={req.status} />
+              {req.type === 'deposit' && req.status === 'in_progress' ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-violet-50 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300 border border-violet-200 dark:border-violet-800">
+                  Verification in Progress
+                </span>
+              ) : (
+                <StatusBadge status={req.status} />
+              )}
               <PriorityBadge priority={req.priority} />
               {req.deleteRequested && <DeletionPendingBadge />}
             </div>
@@ -414,7 +422,18 @@ export const RequestDetailModal: React.FC = () => {
                               id="cma-checkbox-configure"
                               checked={isConfigureDone}
                               disabled={!canChangeStatus || isAuthorized}
-                              onChange={(e) => updateWithdrawalCmaStep(req.id, 'configure', e.target.checked)}
+                              onChange={(e) => {
+                                if (e.target.checked && !isConfigureDone) {
+                                  // Configure (C) captures the authorized amount first.
+                                  setAuthorizedAmountInput(
+                                    withdrawReq?.authorizedAmount || cma.authorizedAmount || withdrawReq?.amount || 0
+                                  );
+                                  setIsConfiguring(true);
+                                } else {
+                                  setIsConfiguring(false);
+                                  updateWithdrawalCmaStep(req.id, 'configure', e.target.checked);
+                                }
+                              }}
                               className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 dark:border-slate-600 shrink-0 cursor-pointer disabled:cursor-not-allowed"
                             />
                             <div className="flex-1 min-w-0">
@@ -479,14 +498,12 @@ export const RequestDetailModal: React.FC = () => {
                             </div>
                           </label>
 
-                          {/* Checkbox 3: A (Authorize) with Authorized Amount prompt */}
+                          {/* Checkbox 3: A (Authorize) — amount already captured at the C (Configure) step */}
                           <div
                             id="cma-step-authorize-card"
                             className={`p-2.5 sm:p-3 rounded-xl border transition-all ${isAuthorizeDone
                               ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-slate-900 dark:text-white shadow-2xs'
-                              : isAuthorizing
-                                ? 'bg-violet-50/90 dark:bg-violet-950/70 border-violet-400 dark:border-violet-600 ring-2 ring-violet-400/20'
-                                : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-violet-300 dark:hover:border-violet-700'
+                              : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-violet-300 dark:hover:border-violet-700'
                               }`}
                           >
                             <div className="flex items-start gap-2.5">
@@ -495,14 +512,14 @@ export const RequestDetailModal: React.FC = () => {
                                 id="cma-checkbox-authorize"
                                 checked={isAuthorizeDone}
                                 disabled={!canChangeStatus || isAuthorized}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setAuthorizedAmountInput(
-                                      withdrawReq?.authorizedAmount || cma.authorizedAmount || withdrawReq?.amount || 0
-                                    );
-                                    setIsAuthorizing(true);
-                                  }
-                                }}
+                                onChange={(e) =>
+                                  updateWithdrawalCmaStep(
+                                    req.id,
+                                    'authorize',
+                                    e.target.checked,
+                                    authorizedAmountValue || withdrawReq?.amount || 0,
+                                  )
+                                }
                                 className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 dark:border-slate-600 shrink-0 cursor-pointer disabled:cursor-not-allowed"
                               />
                               <div className="flex-1 min-w-0">
@@ -517,19 +534,10 @@ export const RequestDetailModal: React.FC = () => {
                                     <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-0.5">
                                       <ShieldCheck className="w-3 h-3" /> Done
                                     </span>
-                                  ) : canChangeStatus && !isAuthorizing && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setAuthorizedAmountInput(
-                                          withdrawReq?.authorizedAmount || cma.authorizedAmount || withdrawReq?.amount || 0
-                                        );
-                                        setIsAuthorizing(true);
-                                      }}
-                                      className="text-[10px] text-violet-600 dark:text-violet-400 hover:underline font-bold"
-                                    >
+                                  ) : (
+                                    <span className="text-[10px] text-violet-600 dark:text-violet-400 font-bold">
                                       Authorize...
-                                    </button>
+                                    </span>
                                   )}
                                 </div>
 
@@ -547,14 +555,14 @@ export const RequestDetailModal: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                        {/* Authorized Amount Input Box */}
-                        {isAuthorizing && !isAuthorizeDone && (
-                          <div className=" mt-1 pt-2 border-t border-violet-200 dark:border-violet-800/80 space-y-2">
+                        {/* Configured Amount Input Box (captured at the C step) */}
+                        {isConfiguring && !isConfigureDone && (
+                          <div className="p-2.5 sm:p-3 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/40 space-y-2">
                             <div className="flex items-center justify-between text-xs">
-                              <span className="font-bold text-violet-900 dark:text-violet-200">
-                                Authorized Amount:
+                              <span className="font-bold text-indigo-900 dark:text-indigo-200">
+                                Configured / Authorized Amount:
                               </span>
-                              <span className="w-fit[10px] text-slate-500 dark:text-slate-400">
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400">
                                 Req: {withdrawReq?.currency} {withdrawReq?.amount?.toLocaleString()}
                               </span>
                             </div>
@@ -569,17 +577,20 @@ export const RequestDetailModal: React.FC = () => {
                                   min="0"
                                   value={authorizedAmountInput}
                                   onChange={(e) => setAuthorizedAmountInput(e.target.value)}
-                                  className="w-full pl-11 pr-2 py-1.5 text-xs font-bold rounded-lg border border-violet-300 dark:border-violet-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:outline-none"
+                                  className="w-full pl-11 pr-2 py-1.5 text-xs font-bold rounded-lg border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                                   autoFocus
                                 />
                               </div>
                               <button
                                 type="button"
-                                id="confirm-authorize-amount-btn"
+                                id="confirm-configure-amount-btn"
                                 onClick={() => {
-                                  const amt = Number(authorizedAmountInput) > 0 ? Number(authorizedAmountInput) : (withdrawReq?.amount || 0);
-                                  updateWithdrawalCmaStep(req.id, 'authorize', true, amt);
-                                  setIsAuthorizing(false);
+                                  const amt =
+                                    Number(authorizedAmountInput) > 0
+                                      ? Number(authorizedAmountInput)
+                                      : withdrawReq?.amount || 0;
+                                  updateWithdrawalCmaStep(req.id, 'configure', true, amt);
+                                  setIsConfiguring(false);
                                 }}
                                 className="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs flex items-center gap-1 shrink-0 transition-colors"
                               >
@@ -588,14 +599,19 @@ export const RequestDetailModal: React.FC = () => {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => setIsAuthorizing(false)}
+                                onClick={() => {
+                                  setIsConfiguring(false);
+                                  // Revert the checkbox visual state since Configure wasn't confirmed.
+                                  updateWithdrawalCmaStep(req.id, 'configure', false);
+                                }}
                                 className="px-2 py-1.5 text-xs font-semibold rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 shrink-0 transition-colors"
                               >
                                 Cancel
                               </button>
                             </div>
                             <div className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
-                              * Defaults to request amount. Once authorized, request will be automatically completed & locked.
+                              * Defaults to request amount. This amount is locked at the Configure step and shown as
+                              the authorized amount throughout.
                             </div>
                           </div>
                         )}
@@ -624,7 +640,9 @@ export const RequestDetailModal: React.FC = () => {
                               {isPast ? <CheckCircle2 className="w-4 h-4" /> : idx + 1}
                             </div>
                             <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 capitalize mt-1">
-                              {st.replace('_', ' ')}
+                              {req.type === 'deposit' && st === 'in_progress'
+                                ? 'Verification in Progress'
+                                : st.replace('_', ' ')}
                             </span>
                           </div>
                         );
@@ -686,6 +704,15 @@ export const RequestDetailModal: React.FC = () => {
                       <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
                         Update State:
                       </span>
+                      {req.status !== 'in_progress' && (
+                        <button
+                          id="set-pending-btn"
+                          onClick={() => handleStatusChange('in_progress')}
+                          className="px-2.5 py-1 text-xs font-semibold rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-1"
+                        >
+                          Verification In Progress
+                        </button>
+                      )}
                       {req.status !== 'completed' && (
                         <button
                           id="set-completed-btn"
@@ -740,7 +767,9 @@ export const RequestDetailModal: React.FC = () => {
                     <div>
                       <span className="text-slate-400">Transfer Method</span>
                       <div className="font-semibold text-slate-800 dark:text-slate-200 capitalize">
-                        {(req as HoldingDepositRequest).depositMethod?.replace('_', ' ')}
+                        {(req as HoldingDepositRequest).depositMethod === 'bank_deposit'
+                          ? 'Cash Deposit'
+                          : (req as HoldingDepositRequest).depositMethod?.replace('_', ' ').toUpperCase()}
                       </div>
                     </div>
 
@@ -751,22 +780,42 @@ export const RequestDetailModal: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="col-span-2">
+                    <div>
+                      <span className="text-slate-400">Kiosk ID</span>
+                      <div className="font-semibold text-slate-800 dark:text-slate-200">
+                        {(req as HoldingDepositRequest).kioskId || 'N/A'}
+                      </div>
+                    </div>
+
+                    {((req as HoldingDepositRequest).branchCode || (req as HoldingDepositRequest).depositMethod === 'bank_deposit') && (
+                      <div>
+                        <span className="text-slate-400">Branch Code</span>
+                        <div className="font-semibold font-mono text-slate-800 dark:text-slate-200">
+                          {(req as HoldingDepositRequest).branchCode || 'N/A'}
+                        </div>
+                      </div>
+                    )}
+
+                    {((req as HoldingDepositRequest).depositMethod === 'imps') && (
+                      <div>
+                        <span className="text-slate-400">
+                          Reference Number
+                        </span>
+                        <div className="font-mono font-bold text-slate-900 dark:text-white break-all">
+                          {(req as HoldingDepositRequest).transactionReferenceId || 'N/A'}
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
                       <span className="text-slate-400">Sender Account Name</span>
                       <div className="font-semibold text-slate-900 dark:text-white">
                         {(req as HoldingDepositRequest).senderAccountName || 'N/A'}
                       </div>
                     </div>
 
-                    <div className="col-span-3">
-                      <span className="text-slate-400">Transaction Ref / Hash</span>
-                      <div className="font-mono font-bold text-slate-900 dark:text-white break-all">
-                        {(req as HoldingDepositRequest).transactionReferenceId}
-                      </div>
-                    </div>
-
                     {(req as HoldingDepositRequest).verifiedTransactionId && (
-                      <div className="col-span-3 p-2 rounded bg-emerald-100/70 dark:bg-emerald-900/50 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5 font-mono">
+                      <div className="col-span-2 sm:col-span-3 p-2 rounded bg-emerald-100/70 dark:bg-emerald-900/50 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5 font-mono">
                         <FileCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                         <span>Confirmed Ledger Tx: {(req as HoldingDepositRequest).verifiedTransactionId}</span>
                       </div>
@@ -813,24 +862,38 @@ export const RequestDetailModal: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="col-span-2">
-                      <span className="text-slate-400">Beneficiary Legal Name</span>
-                      <div className="font-semibold text-slate-900 dark:text-white">
-                        {(req as HoldingWithdrawRequest).beneficiaryAccountName}
+                    <div>
+                      <span className="text-slate-400">Kiosk ID</span>
+                      <div className="font-semibold text-slate-800 dark:text-slate-200">
+                        {(req as HoldingWithdrawRequest).kioskId || 'N/A'}
                       </div>
                     </div>
 
                     <div>
-                      <span className="text-slate-400">Bank / Network</span>
+                      <span className="text-slate-400">Beneficiary Legal Name</span>
+                      <div className="font-semibold text-slate-900 dark:text-white">
+                        {(req as HoldingWithdrawRequest).beneficiaryAccountName || 'N/A'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-slate-400">Bank Name</span>
                       <div className="font-medium text-slate-800 dark:text-slate-200">
                         {(req as HoldingWithdrawRequest).bankNameOrNetwork || 'N/A'}
                       </div>
                     </div>
 
-                    <div className="col-span-3">
-                      <span className="text-slate-400">Beneficiary Account / IBAN / Crypto Address</span>
+                    <div>
+                      <span className="text-slate-400">IFSC Code</span>
+                      <div className="font-mono font-medium text-slate-800 dark:text-slate-200 uppercase">
+                        {(req as HoldingWithdrawRequest).swiftOrIban || 'N/A'}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-slate-400">Beneficiary Account</span>
                       <div className="font-mono font-bold text-slate-900 dark:text-white break-all">
-                        {(req as HoldingWithdrawRequest).beneficiaryAccountNumberOrAddress}
+                        {(req as HoldingWithdrawRequest).beneficiaryAccountNumberOrAddress || 'N/A'}
                       </div>
                     </div>
                   </div>
@@ -992,7 +1055,7 @@ export const RequestDetailModal: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <MessageSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                     <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
-                      Chat ({req.comments.length})
+                      {req.comments.length < 1 ? 'Open Chat' : 'Chat ' + req.comments.length}
                     </span>
                   </div>
                   {canAddInternal && (

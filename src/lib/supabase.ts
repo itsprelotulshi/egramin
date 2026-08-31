@@ -126,276 +126,18 @@ export const supabase: SupabaseClient = isSupabaseConfigured
   ) as unknown as SupabaseClient);
 
 // -------------------------------------------------------------
-// Type mappers (DB Snake_Case <-> Frontend CamelCase)
-// -------------------------------------------------------------
-
-export function mapDbUser(row: DbUser | any): User {
-  return {
-    id: row.id,
-    authUserId: row.auth_user_id || undefined,
-    name: row.name,
-    email: row.email,
-    role: (row.role as UserRole) || 'client',
-    avatarUrl: row.avatar_url || undefined,
-    companyName: row.company_name || undefined,
-    phoneNumber: row.phone_number || undefined,
-    account: row.account ? String(row.account) : '',
-    ifsc: row.ifsc || '',
-    bank: row.bank || '',
-    estimatedHoldingBalance: row.estimated_holding_balance ? Number(row.estimated_holding_balance) : 0,
-    currency: row.currency || 'INR',
-    status: (row.status as User['status']) || 'active',
-    createdAt: row.created_at || new Date().toISOString(),
-  };
-}
-
-export function mapUserToDb(u: User): DbUserInsert {
-  return {
-    id: u.id,
-    auth_user_id: u.authUserId || null,
-    name: u.name,
-    email: u.email,
-    role: u.role,
-    avatar_url: u.avatarUrl || null,
-    company_name: u.companyName || null,
-    phone_number: u.phoneNumber || null,
-    account: u.account ? Number(u.account) || null : null,
-    ifsc: u.ifsc || null,
-    bank: u.bank || null,
-    estimated_holding_balance: u.estimatedHoldingBalance ?? null,
-    currency: u.currency || 'INR',
-    status: u.status,
-    created_at: u.createdAt,
-  };
-}
-
-export async function saveUserToSupabase(user: User): Promise<void> {
-  const payload = mapUserToDb(user);
-  const { error } = await supabase.from('csmp_users').upsert(payload, { onConflict: 'email' });
-  if (error) throw error;
-}
-
-export function mapDbRequest(row: DbRequest | any): ServiceRequest {
-  const base: any = {
-    id: row.id,
-    ticketNumber: row.ticket_number,
-    type: row.type,
-    title: row.title,
-    description: row.description || '',
-    status: row.status as RequestStatus,
-    priority: row.priority as RequestPriority,
-    clientId: row.client_id,
-    clientName: row.client_name,
-    clientEmail: row.client_email,
-    clientCompany: row.client_company || undefined,
-    assignedOperatorId: row.assigned_operator_id || undefined,
-    assignedOperatorName: row.assigned_operator_name || undefined,
-    createdAt: row.created_at || new Date().toISOString(),
-    updatedAt: row.updated_at || new Date().toISOString(),
-    resolvedAt: row.resolved_at || undefined,
-    deleteRequested: Boolean(row.delete_requested),
-    deleteRequestedBy: row.delete_requested_by || undefined,
-    deleteRequestedById: row.delete_requested_by_id || undefined,
-    deleteRequestedReason: row.delete_requested_reason || undefined,
-    deleteRequestedAt: row.delete_requested_at || undefined,
-    attachments: Array.isArray(row.attachments) ? row.attachments : [],
-    comments: Array.isArray(row.comments)
-      ? row.comments.map((c: any) => ({
-        id: c.id || `cm_${Date.now()}`,
-        authorId: c.authorId || c.author_id || 'usr_system',
-        authorName: c.authorName || c.author_name || 'System User',
-        authorRole: c.authorRole || c.author_role || 'client',
-        authorAvatar: c.authorAvatar || c.author_avatar,
-        content: c.content || '',
-        isInternal: c.isInternal !== undefined ? c.isInternal : (c.is_internal !== undefined ? c.is_internal : false),
-        createdAt: c.createdAt || c.created_at || (row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString()),
-        attachments: Array.isArray(c.attachments) ? c.attachments : [],
-      }))
-      : [],
-  };
-
-  if (row.type === 'support') {
-    return {
-      ...base,
-      type: 'support',
-      category: row.category || 'matm',
-      remoteId: row.remote_id || undefined,
-      environment: row.browser_info || undefined,
-      browserInfo: row.browser_info || undefined,
-    } as SupportTicket;
-  }
-
-  if (row.type === 'deposit') {
-    return {
-      ...base,
-      type: 'deposit',
-      amount: row.amount ? Number(row.amount) : 0,
-      currency: row.currency || 'USD',
-      depositMethod: row.deposit_method || 'bank_deposit',
-      transactionReferenceId: row.transaction_reference_id || '',
-      senderAccountName: row.sender_account_name || undefined,
-      depositDate: row.deposit_date || new Date().toISOString().split('T')[0],
-      destinationAccount: '',
-      verifiedTransactionId: row.verified_transaction_id || undefined,
-    } as HoldingDepositRequest;
-  }
-
-  return {
-    ...base,
-    type: 'withdraw',
-    amount: row.amount ? Number(row.amount) : 0,
-    currency: row.currency || 'USD',
-    withdrawMethod: row.withdraw_method || 'bank_wire',
-    beneficiaryAccountName: row.beneficiary_account_name || '',
-    beneficiaryAccountNumberOrAddress: row.beneficiary_account_number_or_address || '',
-    bankNameOrNetwork: row.bank_name_or_network || undefined,
-    swiftOrIban: row.swift_or_iban || undefined,
-    reason: row.reason || undefined,
-    transferReceiptRef: row.transfer_receipt_ref || undefined,
-    cmaStatus: row.cma_status || undefined,
-    authorizedAmount: row.cma_status?.authorizedAmount || (row.authorized_amount ? Number(row.authorized_amount) : undefined),
-  } as HoldingWithdrawRequest;
-}
-
-export function mapRequestToDb(req: ServiceRequest): DbRequestInsert {
-  const dbReq: any = {
-    id: req.id,
-    ticket_number: req.ticketNumber,
-    type: req.type,
-    title: req.title,
-    description: req.description,
-    status: req.status,
-    priority: req.priority,
-    client_id: req.clientId,
-    client_name: req.clientName,
-    client_email: req.clientEmail,
-    client_company: req.clientCompany || null,
-    assigned_operator_id: req.assignedOperatorId || null,
-    assigned_operator_name: req.assignedOperatorName || null,
-    attachments: (req.attachments || []) as any,
-    comments: ((req.comments || []).map((c: any) => {
-      const ts = c.createdAt || c.created_at || new Date().toISOString();
-      return {
-        id: c.id,
-        authorId: c.authorId || c.author_id,
-        authorName: c.authorName || c.author_name,
-        authorRole: c.authorRole || c.author_role,
-        authorAvatar: c.authorAvatar || c.author_avatar,
-        content: c.content,
-        isInternal: c.isInternal !== undefined ? c.isInternal : (c.is_internal !== undefined ? c.is_internal : false),
-        createdAt: ts,
-        created_at: ts,
-        attachments: c.attachments || [],
-      };
-    })) as any,
-    created_at: req.createdAt,
-    updated_at: req.updatedAt,
-    resolved_at: req.resolvedAt || null,
-    delete_requested: Boolean(req.deleteRequested),
-    delete_requested_by: req.deleteRequestedBy || null,
-    delete_requested_by_id: req.deleteRequestedById || null,
-    delete_requested_reason: req.deleteRequestedReason || null,
-    delete_requested_at: req.deleteRequestedAt || null,
-  };
-
-  if (req.type === 'support') {
-    const sReq = req as SupportTicket;
-    dbReq.category = sReq.category;
-    dbReq.remote_id = sReq.remoteId || null;
-    dbReq.browser_info = sReq.browserInfo || null;
-  } else if (req.type === 'deposit') {
-    const dReq = req as HoldingDepositRequest;
-    dbReq.amount = dReq.amount;
-    dbReq.currency = dReq.currency;
-    dbReq.deposit_method = dReq.depositMethod;
-    dbReq.transaction_reference_id = dReq.transactionReferenceId;
-    dbReq.sender_account_name = dReq.senderAccountName || null;
-    dbReq.deposit_date = dReq.depositDate;
-    dbReq.verified_transaction_id = dReq.verifiedTransactionId || null;
-  } else if (req.type === 'withdraw') {
-    const wReq = req as HoldingWithdrawRequest;
-    dbReq.amount = wReq.amount;
-    dbReq.currency = wReq.currency;
-    dbReq.withdraw_method = wReq.withdrawMethod;
-    dbReq.beneficiary_account_name = wReq.beneficiaryAccountName;
-    dbReq.beneficiary_account_number_or_address = wReq.beneficiaryAccountNumberOrAddress;
-    dbReq.bank_name_or_network = wReq.bankNameOrNetwork || null;
-    dbReq.swift_or_iban = wReq.swiftOrIban || null;
-    dbReq.reason = wReq.reason || null;
-    dbReq.transfer_receipt_ref = wReq.transferReceiptRef || null;
-    dbReq.cma_status = (wReq.cmaStatus || null) as any;
-    dbReq.authorized_amount = wReq.authorizedAmount || wReq.cmaStatus?.authorizedAmount || null;
-  }
-
-  return dbReq;
-}
-
-export function mapDbAuditLog(row: DbAuditLog | any): AuditLog {
-  return {
-    id: row.id,
-    actorId: row.actor_id,
-    actorName: row.actor_name,
-    actorRole: (row.actor_role as UserRole) || 'client',
-    action: row.action,
-    targetType: (row.target_type as any) || 'system',
-    targetId: row.target_id,
-    details: row.details,
-    timestamp: row.timestamp || new Date().toISOString(),
-    ipAddress: row.ip_address || undefined,
-  };
-}
-
-export function mapAuditLogToDb(log: AuditLog): DbAuditLogInsert {
-  return {
-    id: log.id,
-    actor_id: log.actorId,
-    actor_name: log.actorName,
-    actor_role: log.actorRole,
-    action: log.action,
-    target_type: log.targetType,
-    target_id: log.targetId,
-    details: log.details,
-    timestamp: log.timestamp,
-    ip_address: log.ipAddress || null,
-  };
-}
-
-export function mapDbNotification(row: DbNotification | any): Notification {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    title: row.title,
-    message: row.message,
-    type: (row.type as any) || 'info',
-    category: (row.category as any) || 'system',
-    requestId: row.request_id || undefined,
-    isRead: Boolean(row.is_read),
-    createdAt: row.created_at || new Date().toISOString(),
-  };
-}
-
-export function mapNotificationToDb(n: Notification): DbNotificationInsert {
-  return {
-    id: n.id,
-    user_id: n.userId,
-    title: n.title,
-    message: n.message,
-    type: n.type,
-    category: n.category,
-    request_id: n.requestId || null,
-    is_read: n.isRead,
-    created_at: n.createdAt,
-  };
-}
-
-// -------------------------------------------------------------
-// API / Database Operations
+// Direct API / Database Operations (Supabase Schema Types)
 // -------------------------------------------------------------
 
 export async function fetchUsersFromSupabase(): Promise<User[]> {
   const { data, error } = await supabase.from('csmp_users').select('*').order('created_at', { ascending: true });
   if (error) throw error;
-  return (data || []).map(mapDbUser);
+  return (data || []) as User[];
+}
+
+export async function saveUserToSupabase(user: DbUserInsert | any): Promise<void> {
+  const { error } = await supabase.from('csmp_users').upsert(user, { onConflict: 'email' });
+  if (error) throw error;
 }
 
 export async function deleteUserFromSupabase(userId: string): Promise<void> {
@@ -406,21 +148,68 @@ export async function deleteUserFromSupabase(userId: string): Promise<void> {
 export async function fetchRequestsFromSupabase(): Promise<ServiceRequest[]> {
   const { data, error } = await supabase.from('csmp_requests').select('*').order('created_at', { ascending: false });
   if (error) throw error;
-  return (data || []).map(mapDbRequest);
+  return (data || []) as ServiceRequest[];
 }
 
-export async function saveRequestToSupabase(req: ServiceRequest): Promise<void> {
-  const payload = mapRequestToDb(req);
-  const { error } = await supabase.from('csmp_requests').upsert(payload, { onConflict: 'id' });
+// -------------------------------------------------------------
+// Collision-resistant identifiers & ticket numbers
+// -------------------------------------------------------------
+export function generateRequestId(prefix = 'req'): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function generateTicketNumber(type: string, counter: number): string {
+  const prefix = type === 'support' ? 'TCK' : 'HLD';
+  const offset = type === 'support' ? 101 : type === 'deposit' ? 201 : 301;
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `${prefix}-${new Date().getFullYear()}-${counter + offset}-${suffix}`;
+}
+
+// Lightweight in-memory queue for requests whose Supabase write failed
+const pendingSyncQueue: any[] = [];
+
+export function queueRequestForRetry(req: any): void {
+  if (!pendingSyncQueue.some(r => r.id === req.id)) pendingSyncQueue.push(req);
+}
+
+export async function flushPendingRequestSync(): Promise<void> {
+  for (const req of [...pendingSyncQueue]) {
+    try {
+      await saveRequestToSupabase(req);
+      pendingSyncQueue.splice(pendingSyncQueue.indexOf(req), 1);
+    } catch (err: any) {
+      console.warn(`Still unable to sync ${req.ticket_number || req.ticketNumber}:`, err.message);
+    }
+  }
+}
+
+export async function saveRequestToSupabase(req: DbRequestInsert | any): Promise<void> {
+  const ticketNumber = req.ticket_number || req.ticketNumber;
+  const attempt = (tNum: string) =>
+    supabase.from('csmp_requests').upsert(
+      { ...req, ticket_number: tNum },
+      { onConflict: 'id' }
+    );
+
+  let { error } = await attempt(ticketNumber);
   if (error) {
     console.warn('Initial Supabase upsert error:', error.message, error.details || '');
-    // Graceful fallback: strip columns that may not yet exist in older schema deployments
-    const fallbackPayload = { ...payload };
+    if (error.message && /unique|duplicate/i.test(error.message)) {
+      const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+      const collisionRetry = await attempt(`${ticketNumber}-${suffix}`);
+      if (!collisionRetry.error) return;
+      error = collisionRetry.error;
+      console.warn('Ticket-number collision retry failed:', error.message);
+    }
+    const fallbackPayload: any = { ...req };
     delete fallbackPayload.cma_status;
     delete fallbackPayload.authorized_amount;
     delete fallbackPayload.transfer_receipt_ref;
     delete fallbackPayload.resolved_at;
     delete fallbackPayload.client_company;
+    delete fallbackPayload.beneficiary_account_number;
+    delete fallbackPayload.bank_name;
+    delete fallbackPayload.bank_ifsc;
     delete fallbackPayload.delete_requested;
     delete fallbackPayload.delete_requested_by;
     delete fallbackPayload.delete_requested_by_id;
@@ -431,7 +220,6 @@ export async function saveRequestToSupabase(req: ServiceRequest): Promise<void> 
       console.error('Supabase request upsert fallback error:', retry.error.message, retry.error.details || '');
       throw retry.error;
     }
-    return;
   }
 }
 
@@ -492,16 +280,14 @@ export async function savePermissionsToSupabase(_role: UserRole, _perms: RolePer
   // Hardcoded permissions array used - no-op for database writes
 }
 
-
 export async function fetchNotificationsFromSupabase(): Promise<Notification[]> {
   const { data, error } = await supabase.from('csmp_notifications').select('*').order('created_at', { ascending: false });
   if (error) throw error;
-  return (data || []).map(mapDbNotification);
+  return (data || []) as Notification[];
 }
 
-export async function saveNotificationToSupabase(n: Notification): Promise<void> {
-  const payload = mapNotificationToDb(n);
-  const { error } = await supabase.from('csmp_notifications').upsert(payload, { onConflict: 'id' });
+export async function saveNotificationToSupabase(n: DbNotificationInsert | any): Promise<void> {
+  const { error } = await supabase.from('csmp_notifications').upsert(n, { onConflict: 'id' });
   if (error) throw error;
 }
 
@@ -521,12 +307,11 @@ export async function markAllNotificationsReadInSupabase(userId: string): Promis
 export async function fetchAuditLogsFromSupabase(): Promise<AuditLog[]> {
   const { data, error } = await supabase.from('csmp_audit_logs').select('*').order('timestamp', { ascending: false }).limit(100);
   if (error) throw error;
-  return (data || []).map(mapDbAuditLog);
+  return (data || []) as AuditLog[];
 }
 
-export async function saveAuditLogToSupabase(log: AuditLog): Promise<void> {
-  const payload = mapAuditLogToDb(log);
-  const { error } = await supabase.from('csmp_audit_logs').insert(payload);
+export async function saveAuditLogToSupabase(log: DbAuditLogInsert | any): Promise<void> {
+  const { error } = await supabase.from('csmp_audit_logs').insert(log);
   if (error) throw error;
 }
 
@@ -579,4 +364,126 @@ export async function checkSupabaseHealth(): Promise<{
       error: 'Could not reach database. Check your connection or Supabase project status.',
     };
   }
+}
+
+// -------------------------------------------------------------
+// STORAGE: Request attachments
+// -------------------------------------------------------------
+const ATTACHMENT_BUCKET = 'csmp-attachments';
+
+function sanitizeAttachmentName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 80) || 'file';
+}
+
+/**
+ * Upload a set of files to the `csmp-attachments` Storage bucket and return
+ * Attachment records (public URLs) ready to store on a request.
+ *
+ * Falls back to local data-URL attachments when Supabase is not configured or
+ * the upload fails, so the client UI never hard-crashes on a storage outage.
+ */
+export type UploadableAttachment =
+  | File
+  | Attachment
+  | { name: string; size: number; type: string; url: string; file?: File };
+
+/** Resolve the raw bytes to upload, if any, from a local record or File. */
+function resolveSourceFile(f: UploadableAttachment): File | null {
+  if (f instanceof File) return f;
+  const maybe = (f as { file?: File }).file;
+  return maybe || null;
+}
+
+export async function uploadAttachmentsToSupabase(
+  ownerId: string,
+  files: UploadableAttachment[],
+): Promise<Attachment[]> {
+  const uploaded: Attachment[] = [];
+  const nowIso = new Date().toISOString();
+
+  if (!isSupabaseConfigured) {
+    // Offline/demo: keep in-memory data URLs (no real Storage).
+    for (const f of files) {
+      uploaded.push(await normalizeAttachment(f, 'local-' + Math.random().toString(36).slice(2, 8), nowIso, ownerId));
+    }
+    return uploaded;
+  }
+
+  for (const f of files) {
+    // Already an uploaded Attachment -> pass through untouched.
+    if (!(f instanceof File) && (f as Attachment).id) {
+      uploaded.push(f as Attachment);
+      continue;
+    }
+
+    // A local preview without raw bytes cannot reach Storage — keep its data URL.
+    const rawFile = resolveSourceFile(f);
+    if (!rawFile) {
+      uploaded.push(await normalizeAttachment(f, 'local-' + Math.random().toString(36).slice(2, 8), nowIso, ownerId));
+      continue;
+    }
+
+    try {
+      const safeName = sanitizeAttachmentName(rawFile.name);
+      const path = `uploads/${ownerId}/${Date.now()}_${safeName}`;
+      const { error } = await supabase.storage
+        .from(ATTACHMENT_BUCKET)
+        .upload(path, rawFile, { upsert: false, contentType: rawFile.type || 'application/octet-stream' });
+      if (error) throw error;
+      const { data: pub } = supabase.storage.from(ATTACHMENT_BUCKET).getPublicUrl(path);
+      const url = pub?.publicUrl || '';
+      uploaded.push(toAttachment(rawFile, 'att_' + Math.random().toString(36).slice(2, 10), url, nowIso, ownerId));
+    } catch (err: any) {
+      // Storage unreachable -> degrade to an in-memory preview so the request still goes through.
+      console.warn('Attachment upload failed, using local preview:', err?.message);
+      uploaded.push(await normalizeAttachment(f, 'local-' + Math.random().toString(36).slice(2, 8), nowIso, ownerId));
+    }
+  }
+  return uploaded;
+}
+
+async function normalizeAttachment(
+  f: UploadableAttachment,
+  id: string,
+  uploadedAt: string,
+  uploadedBy: string,
+): Promise<Attachment> {
+  if (f instanceof File) {
+    return toAttachment(f, id, await fileToDataUrl(f), uploadedAt, uploadedBy);
+  }
+  const rawFile = (f as { file?: File }).file;
+  if (rawFile) {
+    return toAttachment(rawFile, id, (f as any).url || await fileToDataUrl(rawFile), uploadedAt, uploadedBy);
+  }
+  // Local preview object (name/size/type/url) — preserve its data URL.
+  return {
+    id,
+    name: (f as any).name || 'attachment',
+    size: (f as any).size || 0,
+    type: (f as any).type || 'application/octet-stream',
+    url: (f as any).url || '',
+    uploadedAt,
+    uploadedBy,
+  };
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function toAttachment(f: File, id: string, url: string, uploadedAt: string, uploadedBy: string): Attachment {
+  return {
+    id,
+    name: f.name,
+    size: f.size,
+    type: f.type || 'application/octet-stream',
+    url,
+    uploadedAt,
+    uploadedBy,
+  };
 }

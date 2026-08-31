@@ -29,7 +29,7 @@ export const RolePermissionMatrix: React.FC = () => {
     const pageIdSet = new Set<string>(APP_PAGE_DEFINITIONS.map(p => p.id));
 
     // Include any page ID currently stored in csmp_role_permissions.allowed_pages
-    Object.values(permissions).forEach(rolePerm => {
+    Object.values(permissions).forEach((rolePerm: RolePermissions) => {
       if (Array.isArray(rolePerm?.allowedPages)) {
         rolePerm.allowedPages.forEach(p => pageIdSet.add(p));
       }
