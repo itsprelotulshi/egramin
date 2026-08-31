@@ -41,6 +41,8 @@ import {
   markAllNotificationsReadInSupabase,
   fetchAuditLogsFromSupabase,
   saveAuditLogToSupabase,
+  mapDbNotification,
+  mapDbRequest,
   checkSupabaseHealth,
   generateRequestId,
   generateTicketNumber,
@@ -519,7 +521,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .on('postgres_changes', { event: '*', schema: 'public', table: 'csmp_requests' }, (payload: any) => {
         if (payload.new) {
           try {
-            const updatedReq = payload.new as ServiceRequest;
+            const updatedReq = mapDbRequest(payload.new);
             setRequests(prev => {
               const exists = prev.some(r => r.id === updatedReq.id);
               const updated = exists ? prev.map(r => r.id === updatedReq.id ? updatedReq : r) : [updatedReq, ...prev];
@@ -532,16 +534,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           } catch {
             fetchRequestsFromSupabase().then(dbReqs => {
               if (dbReqs) {
-                setRequests(dbReqs as any);
-                saveRequests(dbReqs as any);
+                setRequests(dbReqs);
+                saveRequests(dbReqs);
               }
             }).catch(() => { });
           }
         } else {
           fetchRequestsFromSupabase().then(dbReqs => {
             if (dbReqs) {
-              setRequests(dbReqs as any);
-              saveRequests(dbReqs as any);
+              setRequests(dbReqs);
+              saveRequests(dbReqs);
             }
           }).catch(() => { });
         }
@@ -549,7 +551,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .on('postgres_changes', { event: '*', schema: 'public', table: 'csmp_notifications' }, (payload: any) => {
         if (payload.new) {
           try {
-            const newNotif = payload.new as Notification;
+            const newNotif = mapDbNotification(payload.new);
             setNotifications(prev => {
               const exists = prev.some(n => n.id === newNotif.id);
               const updated = exists ? prev.map(n => n.id === newNotif.id ? newNotif : n) : [newNotif, ...prev];
