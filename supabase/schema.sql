@@ -319,10 +319,10 @@ CREATE POLICY "csmp_notifications_select_policy" ON csmp_notifications
     -- No anon access
   );
 
--- Any authenticated user can insert notifications (needed to dispatch cross-user alerts)
+-- Any user (authenticated, service_role, or anon guest) can insert notifications (needed to dispatch alerts)
 CREATE POLICY "csmp_notifications_insert_policy" ON csmp_notifications
   FOR INSERT WITH CHECK (
-    auth.role() IN ('authenticated', 'service_role')
+    auth.role() IN ('authenticated', 'service_role', 'anon')
   );
 
 -- Users can mark their own notifications read; admins can update any

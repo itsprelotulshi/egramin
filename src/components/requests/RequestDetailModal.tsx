@@ -461,67 +461,6 @@ export const RequestDetailModal: React.FC = () => {
                             </div>
                           </label>
 
-                          {/* Configured Amount Input Box (captured at the C step) */}
-                          {isConfiguring && !isConfigureDone && (
-                            <div className="p-2.5 sm:p-3 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/40 space-y-2">
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="font-bold text-indigo-900 dark:text-indigo-200">
-                                  Configured / Authorized Amount:
-                                </span>
-                                <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                                  Req: {withdrawReq?.currency} {withdrawReq?.amount?.toLocaleString()}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <div className="relative flex-1">
-                                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
-                                    {withdrawReq?.currency}
-                                  </span>
-                                  <input
-                                    type="number"
-                                    step="any"
-                                    min="0"
-                                    value={authorizedAmountInput}
-                                    onChange={(e) => setAuthorizedAmountInput(e.target.value)}
-                                    className="w-full pl-11 pr-2 py-1.5 text-xs font-bold rounded-lg border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                                    autoFocus
-                                  />
-                                </div>
-                                <button
-                                  type="button"
-                                  id="confirm-configure-amount-btn"
-                                  onClick={() => {
-                                    const amt =
-                                      Number(authorizedAmountInput) > 0
-                                        ? Number(authorizedAmountInput)
-                                        : withdrawReq?.amount || 0;
-                                    updateWithdrawalCmaStep(req.id, 'configure', true, amt);
-                                    setIsConfiguring(false);
-                                  }}
-                                  className="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs flex items-center gap-1 shrink-0 transition-colors"
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  Confirm
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setIsConfiguring(false);
-                                    // Revert the checkbox visual state since Configure wasn't confirmed.
-                                    updateWithdrawalCmaStep(req.id, 'configure', false);
-                                  }}
-                                  className="px-2 py-1.5 text-xs font-semibold rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 shrink-0 transition-colors"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                              <div className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
-                                * Defaults to request amount. This amount is locked at the Configure step and shown as
-                                the authorized amount throughout.
-                              </div>
-                            </div>
-                          )}
-
                           {/* Checkbox 2: M (Make) */}
                           <label
                             id="cma-step-make-card"
@@ -618,7 +557,66 @@ export const RequestDetailModal: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                        {/* Amount is captured at the Configure (C) step; no separate prompt here. */}
+                        {/* Configured Amount Input Box (captured at the C step) */}
+                        {isConfiguring && !isConfigureDone && (
+                          <div className="p-2.5 sm:p-3 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/40 space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-bold text-indigo-900 dark:text-indigo-200">
+                                Configured / Authorized Amount:
+                              </span>
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                                Req: {withdrawReq?.currency} {withdrawReq?.amount?.toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <div className="relative flex-1">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                                  {withdrawReq?.currency}
+                                </span>
+                                <input
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  value={authorizedAmountInput}
+                                  onChange={(e) => setAuthorizedAmountInput(e.target.value)}
+                                  className="w-full pl-11 pr-2 py-1.5 text-xs font-bold rounded-lg border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                                  autoFocus
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                id="confirm-configure-amount-btn"
+                                onClick={() => {
+                                  const amt =
+                                    Number(authorizedAmountInput) > 0
+                                      ? Number(authorizedAmountInput)
+                                      : withdrawReq?.amount || 0;
+                                  updateWithdrawalCmaStep(req.id, 'configure', true, amt);
+                                  setIsConfiguring(false);
+                                }}
+                                className="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs flex items-center gap-1 shrink-0 transition-colors"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Confirm
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsConfiguring(false);
+                                  // Revert the checkbox visual state since Configure wasn't confirmed.
+                                  updateWithdrawalCmaStep(req.id, 'configure', false);
+                                }}
+                                className="px-2 py-1.5 text-xs font-semibold rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 shrink-0 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                              * Defaults to request amount. This amount is locked at the Configure step and shown as
+                              the authorized amount throughout.
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -708,6 +706,15 @@ export const RequestDetailModal: React.FC = () => {
                       <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
                         Update State:
                       </span>
+                      {req.status !== 'in_progress' && (
+                        <button
+                          id="set-pending-btn"
+                          onClick={() => handleStatusChange('in_progress')}
+                          className="px-2.5 py-1 text-xs font-semibold rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-1"
+                        >
+                          Verification In Progress
+                        </button>
+                      )}
                       {req.status !== 'completed' && (
                         <button
                           id="set-completed-btn"
@@ -773,14 +780,12 @@ export const RequestDetailModal: React.FC = () => {
                       </div>
                     </div>
 
-                    {(req as HoldingDepositRequest).kioskId && (
-                      <div>
-                        <span className="text-slate-400">Kiosk ID</span>
-                        <div className="font-semibold text-slate-800 dark:text-slate-200">
-                          {(req as HoldingDepositRequest).kioskId}
-                        </div>
+                    <div>
+                      <span className="text-slate-400">Kiosk ID</span>
+                      <div className="font-semibold text-slate-800 dark:text-slate-200">
+                        {(req as HoldingDepositRequest).kioskId}
                       </div>
-                    )}
+                    </div>
 
                     {(req as HoldingDepositRequest).branchCode && (
                       <div>
@@ -791,7 +796,7 @@ export const RequestDetailModal: React.FC = () => {
                       </div>
                     )}
 
-                    <div className="col-span-2">
+                    <div>
                       <span className="text-slate-400">Sender Account Name</span>
                       <div className="font-semibold text-slate-900 dark:text-white">
                         {(req as HoldingDepositRequest).senderAccountName || 'N/A'}
@@ -862,7 +867,7 @@ export const RequestDetailModal: React.FC = () => {
                       </div>
                     )}
 
-                    <div className="col-span-2">
+                    <div>
                       <span className="text-slate-400">Beneficiary Legal Name</span>
                       <div className="font-semibold text-slate-900 dark:text-white">
                         {(req as HoldingWithdrawRequest).beneficiaryAccountName}
@@ -876,8 +881,8 @@ export const RequestDetailModal: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="col-span-3">
-                      <span className="text-slate-400">Beneficiary Account / IBAN / Crypto Address</span>
+                    <div>
+                      <span className="text-slate-400">Beneficiary Account</span>
                       <div className="font-mono font-bold text-slate-900 dark:text-white break-all">
                         {(req as HoldingWithdrawRequest).beneficiaryAccountNumberOrAddress}
                       </div>
@@ -1041,7 +1046,7 @@ export const RequestDetailModal: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <MessageSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                     <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
-                      Chat ({req.comments.length})
+                      {req.comments.length < 1 ? 'Open Chat' : 'Chat ' + req.comments.length}
                     </span>
                   </div>
                   {canAddInternal && (

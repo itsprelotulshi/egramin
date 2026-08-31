@@ -201,7 +201,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // ── Step 2: Role + profile fields come from public.csmp_users (auth_user_id FK).
     let { data: dbRow, error: dbErr } = await supabase
       .from('csmp_users')
-      .select('id, auth_user_id, name, email, role, status, avatar_url, company_name, phone_number, currency, account, ifsc, bank, estimated_holding_balance, created_at')
+      .select('id, auth_user_id, name, email, role, status, avatar_url, company_name, phone_number, currency, account, ifsc, bank, kiosk_id, estimated_holding_balance, created_at')
       .eq('auth_user_id', authUsr.id)
       .maybeSingle();
 
@@ -209,7 +209,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!dbRow && authIdentity.email) {
       const { data: emailRow } = await supabase
         .from('csmp_users')
-        .select('id, auth_user_id, name, email, role, status, avatar_url, company_name, phone_number, currency, account, ifsc, bank, estimated_holding_balance, created_at')
+        .select('id, auth_user_id, name, email, role, status, avatar_url, company_name, phone_number, currency, account, ifsc, bank, kiosk_id, estimated_holding_balance, created_at')
         .eq('email', authIdentity.email.trim())
         .maybeSingle();
 
@@ -275,6 +275,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         account: dbRow.account || '',
         ifsc: dbRow.ifsc || '',
         bank: dbRow.bank || '',
+        kioskId: dbRow.kiosk_id || '',
         createdAt: dbRow.created_at,
       };
 

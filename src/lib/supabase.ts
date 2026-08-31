@@ -566,7 +566,7 @@ export async function fetchNotificationsFromSupabase(): Promise<Notification[]> 
 
 export async function saveNotificationToSupabase(n: Notification): Promise<void> {
   const payload = mapNotificationToDb(n);
-  const { error } = await supabase.from('csmp_notifications').upsert(payload, { onConflict: 'id' });
+  const { error } = await supabase.from('csmp_notifications').insert(payload);
   if (error) throw error;
 }
 

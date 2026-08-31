@@ -31,10 +31,11 @@ interface AttachedFile {
 
 export const CreateRequestModal: React.FC = () => {
   const { isCreateModalOpen, setIsCreateModalOpen, initialCreateType, createSupportTicket, createHoldingDeposit, createHoldingWithdraw, setActiveRequest, toast } = useApp();
-  const { user, session } = useAuth();
-  const hasValidSession = !!session;
+  const { user, session, isAuthenticated } = useAuth();
+  const hasValidSession = !!session || (isAuthenticated && !!user);
 
   const [activeTab, setActiveTab] = useState<RequestType>(initialCreateType || 'support');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Common attachments state
@@ -53,6 +54,7 @@ export const CreateRequestModal: React.FC = () => {
   const [depositCurrency, setDepositCurrency] = useState('INR');
   const [depositMethod, setDepositMethod] = useState<HoldingDepositRequest['depositMethod']>('bank_deposit');
   const [depositTxRef, setDepositTxRef] = useState('');
+  const [depositBranchCode, setDepositBranchCode] = useState('');
   const [depositSender, setDepositSender] = useState(user.name);
   const [kioskId, setKioskId] = useState(user.kioskId || '');
   const [depositDate, setDepositDate] = useState(new Date().toISOString().split('T')[0]);
@@ -65,8 +67,8 @@ export const CreateRequestModal: React.FC = () => {
   const [beneficiaryName, setBeneficiaryName] = useState<string>(user.companyName || user.name);
   const [beneficiaryAccount, setBeneficiaryAccount] = useState<string>(user.account);
   const [showBeneficiaryAccount, setShowBeneficiaryAccount] = useState<boolean>(false);
-  const [bankName, setBankName] = useState<string>('');
-  const [branchCode, setBranchCode] = useState<string>('');
+  const [bankName, setBankName] = useState<string>(user.bank);
+  const [branchCode, setBranchCode] = useState<string>(user.ifsc);
   const [ifscCode, setIfscCode] = useState<string>(user.ifsc);
   const [withdrawReason, setWithdrawReason] = useState<string>('');
   const [withdrawDesc, setWithdrawDesc] = useState<string>('');
@@ -124,8 +126,11 @@ export const CreateRequestModal: React.FC = () => {
     setSupportPriority('medium');
     setRemote('');
     setSupportDesc('');
+    setDepositAmount('');
     setDepositTxRef('');
+    setDepositBranchCode('');
     setDepositDesc('');
+    setWithdrawAmount('');
     setBeneficiaryAccount(user.account);
     setBankName(user.bank);
     setIfscCode(user.ifsc);
@@ -156,64 +161,104 @@ export const CreateRequestModal: React.FC = () => {
       return;
     }
 
-    // Upload selected files to Supabase Storage (degrades to local preview on failure).
-    let uploadedAttachments = attachments;
+    setIsSubmitting(true);
     try {
-      const ownerId = user?.id || '';
-      const uploaded = await uploadAttachmentsToSupabase(ownerId, attachments);
-      if (uploaded.length > 0) uploadedAttachments = uploaded;
-    } catch {
-      // Upload helper already self-degrades; keep the in-memory previews.
-    }
+      // Upload selected files to Supabase Storage (degrades to local preview on failure).
+      let uploadedAttachments = attachments;
+      try {
+        const ownerId = user?.id || '';
+        const uploaded = await uploadAttachmentsToSupabase(ownerId, attachments);
+        if (uploaded.length > 0) uploadedAttachments = uploaded;
+      } catch {
+        // Upload helper already self-degrades; keep the in-memory previews.
+      }
 
-    if (activeTab === 'support') {
-      if (!supportTitle.trim()) return;
-      const newReq = await createSupportTicket({
-        title: supportTitle.trim(),
-        description: supportDesc.trim() || 'No additional technical notes provided.',
-        category: supportCategory,
-        priority: supportPriority,
-        remoteId: remote,
-        browserInfo: navigator.userAgent,
-        attachments: uploadedAttachments,
-      });
-      handleClose();
-      setActiveRequest(newReq);
-    } else if (activeTab === 'deposit') {
-      const amt = parseFloat(depositAmount);
-      if (isNaN(amt) || amt <= 0 || !depositTxRef.trim()) return;
-      const newReq = await createHoldingDeposit({
-        amount: amt,
-        currency: depositCurrency,
-        depositMethod,
-        transactionReferenceId: depositTxRef.trim(),
-        senderAccountName: depositSender.trim(),
-        kioskId: kioskId.trim(),
-        branchCode: branchCode.trim(),
-        depositDate,
-        description: depositDesc.trim() || `Deposit update request of ${depositCurrency} ${amt.toLocaleString()} via ${depositMethod.toUpperCase()}`,
-        attachments: uploadedAttachments,
-      });
-      handleClose();
-      setActiveRequest(newReq);
-    } else if (activeTab === 'withdraw') {
-      const amt = parseFloat(withdrawAmount);
-      if (isNaN(amt) || amt <= 0 || !beneficiaryName.trim() || !beneficiaryAccount) return;
-      const newReq = await createHoldingWithdraw({
-        amount: amt,
-        currency: withdrawCurrency,
-        withdrawMethod,
-        beneficiaryAccountName: beneficiaryName.trim(),
-        kioskId: kioskId.trim(),
-        beneficiaryAccountNumberOrAddress: beneficiaryAccount,
-        bankNameOrNetwork: bankName.trim(),
-        swiftOrIban: ifscCode.trim(),
-        reason: withdrawReason.trim(),
-        description: withdrawDesc.trim() || `Holding withdrawal request of ${withdrawCurrency} ${amt.toLocaleString()} to ${beneficiaryName}`,
-        attachments: uploadedAttachments,
-      });
-      handleClose();
-      setActiveRequest(newReq);
+      if (activeTab === 'support') {
+        if (!supportTitle.trim()) {
+          toast('Please enter a ticket title.', 'error');
+          setIsSubmitting(false);
+          return;
+        }
+        const newReq = await createSupportTicket({
+          title: supportTitle.trim(),
+          description: supportDesc.trim() || 'No additional technical notes provided.',
+          category: supportCategory,
+          priority: supportPriority,
+          remoteId: remote,
+          browserInfo: navigator.userAgent,
+          attachments: uploadedAttachments,
+        });
+        handleClose();
+        setActiveRequest(newReq);
+      } else if (activeTab === 'deposit') {
+        const amt = parseFloat(depositAmount);
+        if (isNaN(amt) || amt <= 0) {
+          toast('Please enter a valid deposit amount.', 'error');
+          setIsSubmitting(false);
+          return;
+        }
+        if (depositMethod === 'bank_deposit' && !depositBranchCode.trim()) {
+          toast('Please enter the branch code.', 'error');
+          setIsSubmitting(false);
+          return;
+        }
+        if ((depositMethod === 'upi' || depositMethod === 'imps') && !depositTxRef.trim()) {
+          toast('Please enter the transaction reference / UTR number.', 'error');
+          setIsSubmitting(false);
+          return;
+        }
+
+        const txRef = depositMethod === 'bank_deposit'
+          ? (depositTxRef.trim() || `DEP-${depositBranchCode.trim()}-${Date.now().toString().slice(-4)}`)
+          : depositTxRef.trim();
+
+        const newReq = await createHoldingDeposit({
+          amount: amt,
+          currency: depositCurrency,
+          depositMethod,
+          transactionReferenceId: txRef,
+          senderAccountName: depositSender.trim() || user.name,
+          kioskId: kioskId.trim() || user.kioskId,
+          branchCode: depositBranchCode.trim(),
+          depositDate: depositDate || new Date().toISOString().split('T')[0],
+          description: depositDesc.trim() || `Deposit update request of ${depositCurrency} ${amt.toLocaleString()} via ${depositMethod.toUpperCase()}`,
+          attachments: uploadedAttachments,
+        });
+        handleClose();
+        setActiveRequest(newReq);
+      } else if (activeTab === 'withdraw') {
+        const amt = parseFloat(withdrawAmount);
+        if (isNaN(amt) || amt <= 0) {
+          toast('Please enter a valid withdrawal amount.', 'error');
+          setIsSubmitting(false);
+          return;
+        }
+        if (!beneficiaryName.trim() || !beneficiaryAccount) {
+          toast('Please provide beneficiary name and account number.', 'error');
+          setIsSubmitting(false);
+          return;
+        }
+        const newReq = await createHoldingWithdraw({
+          amount: amt,
+          currency: withdrawCurrency,
+          withdrawMethod,
+          beneficiaryAccountName: beneficiaryName.trim(),
+          kioskId: kioskId.trim() || user.kioskId,
+          beneficiaryAccountNumberOrAddress: beneficiaryAccount,
+          bankNameOrNetwork: bankName.trim(),
+          swiftOrIban: ifscCode.trim(),
+          reason: withdrawReason.trim(),
+          description: withdrawDesc.trim() || `Holding withdrawal request of ${withdrawCurrency} ${amt.toLocaleString()} to ${beneficiaryName}`,
+          attachments: uploadedAttachments,
+        });
+        handleClose();
+        setActiveRequest(newReq);
+      }
+    } catch (err: any) {
+      console.error('Failed to create request:', err);
+      toast(err.message || 'Failed to submit request', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -418,8 +463,8 @@ export const CreateRequestModal: React.FC = () => {
                       <input
                         id="deposit-amount-input"
                         type="number"
-                        min="10000"
-                        step="5000"
+                        min="1"
+                        step="any"
                         required
                         placeholder='Enter deposit amount'
                         value={depositAmount}
@@ -467,7 +512,7 @@ export const CreateRequestModal: React.FC = () => {
                       <option value="upi">UPI</option>
                     </select>
                   </div>
-                  {depositMethod === 'upi' || depositMethod === 'imps' && (
+                  {(depositMethod === 'upi' || depositMethod === 'imps') && (
                     <div className='sm:col-span-4'>
                       <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                         Reference # / Txn No *
@@ -493,8 +538,8 @@ export const CreateRequestModal: React.FC = () => {
                         type="text"
                         required
                         placeholder="Enter branch code"
-                        value={branchCode}
-                        onChange={(e) => setBranchCode(e.target.value)}
+                        value={depositBranchCode}
+                        onChange={(e) => setDepositBranchCode(e.target.value)}
                         className="w-full px-3.5 py-2 text-xs sm:text-sm font-mono rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
@@ -564,8 +609,8 @@ export const CreateRequestModal: React.FC = () => {
                       <input
                         id="withdraw-amount-input"
                         type="number"
-                        min="10000"
-                        step="5000"
+                        min="1"
+                        step="any"
                         required
                         placeholder="Enter Withdrawal Amount"
                         value={withdrawAmount}
@@ -800,7 +845,7 @@ export const CreateRequestModal: React.FC = () => {
               <button
                 id="submit-request-confirm-btn"
                 type="submit"
-                disabled={!hasValidSession}
+                disabled={!hasValidSession || isSubmitting}
                 className={`px-5 py-2 text-xs sm:text-sm font-semibold text-white rounded-lg shadow-md transition-all active:scale-98 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 ${activeTab === 'support'
                   ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/20'
                   : activeTab === 'deposit'
@@ -808,8 +853,12 @@ export const CreateRequestModal: React.FC = () => {
                     : 'bg-violet-600 hover:bg-violet-700 shadow-violet-600/20'
                   }`}
               >
-                <CheckCircle2 className="w-4 h-4" />
-                Submit Request
+                {isSubmitting ? (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4" />
+                )}
+                {isSubmitting ? 'Submitting...' : 'Submit Request'}
               </button>
             </div>
           </form>
